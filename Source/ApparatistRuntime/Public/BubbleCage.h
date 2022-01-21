@@ -26,7 +26,12 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 {
 	GENERATED_BODY()
 
+  private:
+
+	static TWeakObjectPtr<ABubbleCage> Instance;
+
   public:
+
 	/* Call it before use (when the game starts or when spawned). */
 	void InitializeInternalState();
 
@@ -54,16 +59,11 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	/* Sets default values for this actor's properties. */
 	ABubbleCage();
 
-	/* Returns true if there was a crossing through the game boarders. */
-	FORCEINLINE bool GetCrossing(const FVector& Location) const
+	void
+	BeginPlay() override
 	{
-		return !Bounds.ExpandBy(-1.0f).IsInside(Location);
-	}
-
-	/* Returns true if there was a crossing through the game boarders. */
-	FORCEINLINE bool GetCrossing(const FTransform& Transform) const
-	{
-		return GetCrossing(FVector(Transform.GetLocation()));
+		Instance = this;
+		InitializeInternalState();
 	}
 
 	/* Convert world 2d-location to position in the cage. No checks. */
@@ -87,13 +87,13 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	}
 
 	/* Get the index of the cage cell. */
-	FORCEINLINE int32 GetIndexAt(const FIntVector& CellPoint) const
+	int32 GetIndexAt(const FIntVector& CellPoint) const
 	{
 		return GetIndexAt(CellPoint.X, CellPoint.Y, CellPoint.Z);
 	}
 
 	/* Get the index of the cell by the world position. */
-	FORCEINLINE int32 GetIndexAt(FVector Point) const
+	int32 GetIndexAt(FVector Point) const
 	{
 		return GetIndexAt(WorldToCage(Point));
 	}
@@ -119,6 +119,13 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		return (CellPoint.X >= 0) && (CellPoint.X < Size.X) &&
 			   (CellPoint.Y >= 0) && (CellPoint.Y < Size.Y) &&
 			   (CellPoint.Z >= 0) && (CellPoint.Z < Size.Z);
+	}
+
+	/* Check if the world point is inside the cage. */
+	FORCEINLINE bool
+	IsInside(const FVector& WorldPoint)
+	{
+		return IsInside(WorldToCage(WorldPoint));
 	}
 
 	/* Get subjects in a specific cage cell by position in the cage. */
@@ -174,13 +181,13 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	/* Calculate the collisions between subjects with BubbleSphere trait that
 	 * are positioned.
 	 */
-	UFUNCTION(BlueprintCallable)
-	void Evaluate()
+	void DoEvaluate()
 	{
 		QUICK_SCOPE_CYCLE_COUNTER(STAT_BubbleCage_Evaluate);
 
 		const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
 
+		// Clear-up the cage...
 		for (auto Index : OccupiedCells)
 		{
 			Cells[Index].Subjects.Empty();
@@ -189,12 +196,17 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 
 		/* Setting up OccupiedCells... */
 		auto Filter = FFilter::Make<FLocated, FBubbleSphere>();
-		Mechanism->EnchainSolid(Filter)->Operate([=]
-		(FSolidSubjectHandle Subject, FLocated& Located, FBubbleSphere& BubbleSphere)
+		Mechanism->Enchain(Filter)->Operate([=]
+		(FSubjectHandle Subject, FLocated Located, FBubbleSphere BubbleSphere)
 		{
 			const auto Location = Located.Location;
+			if (UNLIKELY(!IsInside(Location)))
+			{
+				Subject.Despawn();
+				return;
+			}
 			const auto CellIndex = GetIndexAt(Location);
-			Cells[CellIndex].Subjects.Add(Subject);
+ 			Cells[CellIndex].Subjects.Add(Subject);
 #if BUBBLE_DEBUG
 			const FBox CellBox = BoxAt(Location);
 			DrawDebugBox(GetWorld(),
@@ -282,5 +294,15 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 				BubbleSphere.AccumulatedDecoupleCount = 0;
 			}
 		});
+	}
+
+	/* Calculate the collisions between subjects with BubbleSphere trait that
+	 * are positioned.
+	 */
+	UFUNCTION(BlueprintCallable)
+	static void Evaluate()
+	{
+		if (!Instance.IsValid()) return;
+		Instance->DoEvaluate();
 	}
 };
