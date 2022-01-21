@@ -1,0 +1,34 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "Apparatist",
+	"Description": "Official Apparatus utility toolkit.",
+	"Category": "Workflow",
+	"CreatedBy": "SP Vladislav Dmitrievich Turbanov",
+	"CreatedByURL": "https://turbanov.ru",
+	"DocsURL": "https://turbanov.ru/wiki/en/toolworks/docs/apparatus",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/66d674e3675f44c1a1e619de8adcef71",
+	"SupportURL": "https://talk.turbanov.ru",
+	"EngineVersion": "4.27.0",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "ApparatistRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "PreDefault",
+			"WhitelistPlatforms": [ "Win64", "Win32", "Linux", "Mac", "IOS", "Android" ]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "Apparatus",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/66d674e3675f44c1a1e619de8adcef71"
+		}
+	]
+}
