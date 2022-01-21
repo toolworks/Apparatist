@@ -3,7 +3,8 @@
 #include "BubbleCage.h"
 
 
-/* Neighbour cells of the grid. Useful for loop iteration. */
+TWeakObjectPtr<ABubbleCage> ABubbleCage::Instance;
+
 TArray<FIntVector> ABubbleCage::NeighbourOffsets;
 
 /* Sets default values. */
@@ -16,6 +17,6 @@ ABubbleCage::ABubbleCage()
 void ABubbleCage::InitializeInternalState()
 {
 	Cells.Reset();
-	Cells.AddDefaulted(Size.X * Size.Y);
+	Cells.AddDefaulted(Size.X * Size.Y * Size.Z);
 	FlushPersistentDebugLines(GetWorld());
 }
