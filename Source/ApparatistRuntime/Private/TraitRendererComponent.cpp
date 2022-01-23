@@ -18,6 +18,15 @@ void UTraitRendererComponent::TickComponent(
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	if (bFirstTick)
+	{
+		while (GetInstanceCount())
+		{
+			RemoveInstance(0);
+		}
+		bFirstTick = false;
+	}
+
 	const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
 
 	// Register the new subjects...

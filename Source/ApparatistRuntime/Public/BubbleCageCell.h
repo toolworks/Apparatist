@@ -19,7 +19,8 @@ struct APPARATISTRUNTIME_API FBubbleCageCell
 	GENERATED_BODY()
 
   public:
+
 	/* Subjects in a grid cell. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage")
-	FSubjectHandles4 Subjects;
+	FSubjectHandles8 Subjects;
 };

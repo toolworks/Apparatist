@@ -36,6 +36,9 @@ class APPARATISTRUNTIME_API UTraitRendererComponent
 	 */
 	TArray<int32> FreeTransforms;
 
+
+	bool bFirstTick = true;
+
   protected:
 
 	/* This trait tells to the Renderer which objects it should render.
@@ -53,8 +56,7 @@ class APPARATISTRUNTIME_API UTraitRendererComponent
 
   public:
 
-	/* Currently now it don't do anything. */
-	virtual void
+	void
 	TickComponent(float DeltaTime, enum ELevelTick TickType,
 				  FActorComponentTickFunction* ThisTickFunction) override;
 

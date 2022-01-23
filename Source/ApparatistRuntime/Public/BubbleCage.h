@@ -199,6 +199,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		Mechanism->Enchain(Filter)->Operate([=]
 		(FSubjectHandle Subject, FLocated Located, FBubbleSphere BubbleSphere)
 		{
+			check(BubbleSphere.Radius * 2 <= CellSize);
 			const auto Location = Located.Location;
 			if (UNLIKELY(!IsInside(Location)))
 			{
