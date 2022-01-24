@@ -50,6 +50,10 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "BubbleCage")
 	FBox Bounds;
 
+	/* Thikness of cage's bound box. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage")
+	float BoundDebugBoxThikness = 100.f;
+
 	/* All of the cells of the cage. */
 	TArray<FBubbleCageCell> Cells;
 
@@ -163,7 +167,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	{
 		DrawDebugBox(GetWorld(), GetActorLocation(),
 					 Bounds.GetExtent(),
-					 FColor::Yellow, bPersistent, -1, 0, 5);
+					 FColor::Yellow, bPersistent, -1, 0, BoundDebugBoxThikness);
 	}
 
 	/* Here we calculate the cage bounds and draw them. */
@@ -181,6 +185,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	/* Calculate the collisions between subjects with BubbleSphere trait that
 	 * are positioned.
 	 */
+	UFUNCTION(BlueprintCallable, Category = "BubbleCage")
 	void DoEvaluate()
 	{
 		QUICK_SCOPE_CYCLE_COUNTER(STAT_BubbleCage_Evaluate);
