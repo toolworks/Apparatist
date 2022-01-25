@@ -67,18 +67,17 @@ void UTraitRendererComponent::TickComponent(
 			FQuat::Identity,
 			Located.Location,
 			Scale);
-		ValidTransforms.SetAt(Rendering.InstanceId, true);
+		ValidTransforms[Rendering.InstanceId] = true;
 		Transforms[Rendering.InstanceId] = SubjectTransform;
 	});
 
+	// Zero-down the unoccupied transforms...
 	FreeTransforms.Reset();
-	for (int32 i = 0; i < Transforms.Num(); ++i)
+	for (int32 i = ValidTransforms.IndexOf(false); i < Transforms.Num();
+		 i = ValidTransforms.IndexOf(false, i + 1))
 	{
-		if (!ValidTransforms[i])
-		{
-			FreeTransforms.Add(i);
-			Transforms[i].SetScale3D(FVector::ZeroVector);
-		}
+		FreeTransforms.Add(i);
+		Transforms[i].SetScale3D(FVector::ZeroVector);
 	}
 
 	if (Transforms.Num() > 0)
