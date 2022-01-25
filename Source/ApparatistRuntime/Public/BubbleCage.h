@@ -261,16 +261,18 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 								{
 									// The distance is too small to get the direction.
 									// Use the ids to get the direction.
+									FVector RandVector{ FMath::FRand(), FMath::FRand(), FMath::FRand() };
+
 									if (Bubble.GetId() > OtherBubble.GetId())
 									{
 										BubbleSphere.AccumulatedDecouple +=
-											FVector(1, 0, 0) * DistanceDelta *
+											RandVector * DistanceDelta *
 											0.5f;
 									}
 									else
 									{
 										BubbleSphere.AccumulatedDecouple +=
-											FVector(-1, 0, 0) * DistanceDelta *
+											(-RandVector) * DistanceDelta *
 											0.5f;
 									}
 								}
