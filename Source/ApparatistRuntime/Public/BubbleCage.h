@@ -233,7 +233,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		Mechanism->ApplyDeferreds();
 
 		// Detect collisions...
-		Mechanism->EnchainSolid(Filter)->Operate([=]
+		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=]
 		(FSolidSubjectHandle Bubble,
 		 FLocated&           Located,
 		 FBubbleSphere&      BubbleSphere)
@@ -292,10 +292,10 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 					}
 				}
 			}
-		});
+		}, 4);
 
-		/* Decouple... */
-		Mechanism->EnchainSolid(Filter)->Operate([=]
+		// Decouple...
+		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=]
 		(FLocated& Located, FBubbleSphere& BubbleSphere)
 		{
 			if (BubbleSphere.AccumulatedDecoupleCount > 0)
@@ -305,7 +305,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 				BubbleSphere.AccumulatedDecouple = FVector::ZeroVector;
 				BubbleSphere.AccumulatedDecoupleCount = 0;
 			}
-		});
+		}, 4);
 	}
 
 	/* Calculate the collisions between subjects with BubbleSphere trait that
