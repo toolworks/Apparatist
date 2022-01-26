@@ -243,7 +243,6 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	/* Calculate the collisions between subjects with BubbleSphere trait that
 	 * are positioned.
 	 */
-	UFUNCTION(BlueprintCallable, Category = "BubbleCage")
 	void DoEvaluate()
 	{
 		QUICK_SCOPE_CYCLE_COUNTER(STAT_BubbleCage_Evaluate);
@@ -257,20 +256,22 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		}
 		OccupiedCells.Reset();
 
-		/* Setting up OccupiedCells... */
+		// Occupy the cage cells...
 		auto Filter = FFilter::Make<FLocated, FBubbleSphere>();
-		Mechanism->Enchain(Filter)->Operate([=]
-		(FSubjectHandle Subject, FLocated Located, FBubbleSphere BubbleSphere)
+		Mechanism->EnchainSolid(Filter)->Operate([=]
+		(FSolidSubjectHandle  Subject,
+		 const FLocated&      Located,
+		 const FBubbleSphere& BubbleSphere)
 		{
 			check(BubbleSphere.Radius * 2 <= CellSize);
 			const auto Location = Located.Location;
 			if (UNLIKELY(!IsInside(Location)))
 			{
-				Subject.Despawn();
+				Subject.DespawnDeferred();
 				return;
 			}
 			const auto CellIndex = GetIndexAt(Location);
- 			Cells[CellIndex].Subjects.Add(Subject);
+ 			Cells[CellIndex].Subjects.Add((FSubjectHandle)Subject);
 #if BUBBLE_DEBUG
 			const FBox CellBox = BoxAt(Location);
 			DrawDebugBox(GetWorld(),
@@ -287,10 +288,13 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 #endif
 			OccupiedCells.Add(CellIndex);
 		});
+		Mechanism->ApplyDeferreds();
 
-		/* Detect collisions... */
-		Mechanism->EnchainSolid(Filter)->Operate([=]
-		(FSolidSubjectHandle Bubble, FLocated& Located, FBubbleSphere& BubbleSphere)
+		// Detect collisions...
+		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=]
+		(FSolidSubjectHandle Bubble,
+		 FLocated&           Located,
+		 FBubbleSphere&      BubbleSphere)
 		{
 			const auto Location = Located.Location;
 			const auto CagePos  = WorldToCage(Location);
@@ -346,10 +350,10 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 					}
 				}
 			}
-		});
+		}, 4);
 
-		/* Decouple... */
-		Mechanism->EnchainSolid(Filter)->Operate([=]
+		// Decouple...
+		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=]
 		(FLocated& Located, FBubbleSphere& BubbleSphere)
 		{
 			if (BubbleSphere.AccumulatedDecoupleCount > 0)
@@ -359,7 +363,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 				BubbleSphere.AccumulatedDecouple = FVector::ZeroVector;
 				BubbleSphere.AccumulatedDecoupleCount = 0;
 			}
-		});
+		}, 4);
 	}
 
 	/* Calculate the collisions between subjects with BubbleSphere trait that
