@@ -51,8 +51,16 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	FBox Bounds;
 
 	/* Thikness of cage's bound box. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage")
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage|Debug")
 	float BoundDebugBoxThikness = 100.f;
+
+	/* Allow draw debug 3d-grid*/
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage|Debug")
+	bool bDrawDebugCageCells = false;
+
+	/* Thikness of debug cage cell line. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage|Debug", meta = (EditCondition = "bDrawDebugCageCells"))
+	float DebugCageCellThikness = 1.f;
 
 	/* All of the cells of the cage. */
 	TArray<FBubbleCageCell> Cells;
@@ -70,7 +78,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		InitializeInternalState();
 	}
 
-	/* Convert world 2d-location to position in the cage. No checks. */
+	/* Convert world 3d-location to position in the cage. No checks. */
 	FORCEINLINE FIntVector WorldToCage(FVector Point) const
 	{
 		Point -= Bounds.Min;
@@ -88,6 +96,16 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		Y = FMath::Clamp(Y, 0, Size.Y - 1);
 		Z = FMath::Clamp(Z, 0, Size.Z - 1);
 		return X + Size.X * (Y + Size.Y * Z);
+	}
+
+	/* Get position in the cage by index of the cell*/
+	FORCEINLINE FIntVector
+	GetCellPointByIndex(int32 Index) const
+	{
+		int32 z = Index / (Size.X * Size.Y);
+		int32 layerPadding = Index - (z * Size.X * Size.Y);
+
+		return FIntVector(layerPadding / Size.X, layerPadding % Size.X , z);
 	}
 
 	/* Get the index of the cage cell. */
@@ -139,7 +157,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		return At(CellPoint.X, CellPoint.Y, CellPoint.Z);
 	}
 
-	/* Get subjects in a specific cage cell by world 2d-location. */
+	/* Get subjects in a specific cage cell by world 3d-location. */
 	FORCEINLINE FBubbleCageCell&
 	At(FVector Point)
 	{
@@ -155,7 +173,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		return MoveTemp(Box);
 	}
 
-	/* Get a box shape representing a cell by world 2d-location. */
+	/* Get a box shape representing a cell by world 3d-location. */
 	FORCEINLINE FBox
 	BoxAt(const FVector Point)
 	{
@@ -170,6 +188,42 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 					 FColor::Yellow, bPersistent, -1, 0, BoundDebugBoxThikness);
 	}
 
+	/* Draw debug cage cells*/
+	void DrawDebugCageCells(bool bPersistent = true)
+	{
+		const UWorld* world = GetWorld();
+		
+		/* Draw x-, and y-aligned lines by z coordinates*/
+		for (int32 z = 0; z <= Size.Z; z++)
+		{
+			for (int32 x = 0; x <= Size.X; x++)
+			{
+				DrawDebugLine(world, FVector(Bounds.Min.X + CellSize * x, Bounds.Min.Y, Bounds.Min.Z + CellSize * z),
+					FVector(Bounds.Min.X + CellSize * x, Bounds.Min.Y + CellSize * Size.Y, Bounds.Min.Z + CellSize * z),
+					FColor::Green, bPersistent, -1, 0, DebugCageCellThikness);
+			}
+
+			for (int32 y = 0; y <= Size.Y; y++)
+			{
+				DrawDebugLine(world, FVector(Bounds.Min.X, Bounds.Min.Y + CellSize * y, Bounds.Min.Z + CellSize * z),
+					FVector(Bounds.Min.X + CellSize * Size.X, Bounds.Min.Y + CellSize * y, Bounds.Min.Z + CellSize * z),
+					FColor::Green, bPersistent, -1, 0, DebugCageCellThikness);
+			}
+		}
+
+		/* Draw vertical lines*/
+		for (int32 x = 0; x <= Size.X; x++)
+		{
+			for (int32 y = 0; y <= Size.Y; y++)
+			{
+				DrawDebugLine(world, FVector(Bounds.Min.X + CellSize * x, Bounds.Min.Y + CellSize * y, Bounds.Min.Z),
+					FVector(Bounds.Min.X + CellSize * x, Bounds.Min.Y + CellSize * y, Bounds.Min.Z + CellSize * Size.Z),
+					FColor::Green, bPersistent, -1, 0, DebugCageCellThikness);
+			}
+		}
+
+	}
+
 	/* Here we calculate the cage bounds and draw them. */
 	virtual void OnConstruction(const FTransform& Transform) override
 	{
@@ -180,6 +234,10 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		Bounds.Max = FVector(Transform.GetLocation()) + Extents;
 		FlushPersistentDebugLines(GetWorld());
 		DrawDebugBounds();
+		if (bDrawDebugCageCells)
+		{
+			DrawDebugCageCells();
+		}
 	}
 
 	/* Calculate the collisions between subjects with BubbleSphere trait that
