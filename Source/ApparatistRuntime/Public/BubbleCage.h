@@ -28,9 +28,17 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 
   private:
 
-	static TWeakObjectPtr<ABubbleCage> Instance;
+	static ABubbleCage* Instance;
 
   public:
+
+	void BeginDestroy() override
+	{
+		if (Instance == this)
+		{
+			Instance = nullptr;
+		}
+	}
 
 	/* Call it before use (when the game starts or when spawned). */
 	void InitializeInternalState();
@@ -68,6 +76,12 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	/* The indices of the cells that are currently occupied by the subjects. */
 	TSet<int32> OccupiedCells;
 
+	static FORCEINLINE ABubbleCage*
+	GetInstance()
+	{
+		return Instance;
+	}
+
 	/* Sets default values for this actor's properties. */
 	ABubbleCage();
 
@@ -96,6 +110,82 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		Y = FMath::Clamp(Y, 0, Size.Y - 1);
 		Z = FMath::Clamp(Z, 0, Size.Z - 1);
 		return X + Size.X * (Y + Size.Y * Z);
+	}
+
+	/**
+	 * Get overlapping spheres for the specified location.
+	 */
+	int32
+	GetOverlapping(const FVector&          Location,
+				   TArray<FSubjectHandle>& OutOverlappers) const
+	{
+		OutOverlappers.Reset();
+		const auto CagePos  = WorldToCage(Location);
+		for (const auto& Offset : NeighbourOffsets)
+		{
+			const auto NeighbourCellPos = CagePos + Offset;
+			if (LIKELY(IsInside(NeighbourCellPos)))
+			{
+				const auto& NeighbourCell = At(NeighbourCellPos);
+				for (int32 j = 0; j < NeighbourCell.Subjects.Num(); ++j)
+				{
+					const auto OtherBubble = NeighbourCell.Subjects[j];
+					if (LIKELY(OtherBubble))
+					{
+						const auto OtherBubbleSphere =
+							OtherBubble.GetTrait<FBubbleSphere>();
+						const auto OtherLocation =
+							OtherBubble.GetTrait<FLocated>().GetLocation();
+						const auto Delta = Location - OtherLocation;
+						const float Distance = Delta.Size();
+						if (OtherBubbleSphere.Radius > Distance)
+						{
+							OutOverlappers.Add(OtherBubble);
+						}
+					}
+				}
+			}
+		}
+		return OutOverlappers.Num();
+	}
+
+	/**
+	 * Get overlapping spheres for the specified location.
+	 */
+	int32
+	GetOverlapping(const FVector&          Location,
+				   const float             Radius,
+				   TArray<FSubjectHandle>& OutOverlappers) const
+	{
+		OutOverlappers.Reset();
+		const auto CagePos  = WorldToCage(Location);
+		for (const auto& Offset : NeighbourOffsets)
+		{
+			const auto NeighbourCellPos = CagePos + Offset;
+			if (LIKELY(IsInside(NeighbourCellPos)))
+			{
+				const auto& NeighbourCell = At(NeighbourCellPos);
+				for (int32 j = 0; j < NeighbourCell.Subjects.Num(); ++j)
+				{
+					const auto OtherBubble = NeighbourCell.Subjects[j];
+					if (LIKELY(OtherBubble))
+					{
+						const auto OtherBubbleSphere =
+							OtherBubble.GetTrait<FBubbleSphere>();
+						const auto OtherLocation =
+							OtherBubble.GetTrait<FLocated>().GetLocation();
+						const auto Delta = Location - OtherLocation;
+						const float Distance = Delta.Size();
+						const float DistanceDelta = (Radius + OtherBubbleSphere.Radius) - Distance;
+						if (DistanceDelta > 0)
+						{
+							OutOverlappers.Add(OtherBubble);
+						}
+					}
+				}
+			}
+		}
+		return OutOverlappers.Num();
 	}
 
 	/* Get position in the cage by index of the cell*/
@@ -136,7 +226,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 
 	/* Check if the cage point is inside the cage. */
 	FORCEINLINE bool
-	IsInside(const FIntVector& CellPoint)
+	IsInside(const FIntVector& CellPoint) const
 	{
 		return (CellPoint.X >= 0) && (CellPoint.X < Size.X) &&
 			   (CellPoint.Y >= 0) && (CellPoint.Y < Size.Y) &&
@@ -145,7 +235,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 
 	/* Check if the world point is inside the cage. */
 	FORCEINLINE bool
-	IsInside(const FVector& WorldPoint)
+	IsInside(const FVector& WorldPoint) const
 	{
 		return IsInside(WorldToCage(WorldPoint));
 	}
@@ -157,9 +247,23 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		return At(CellPoint.X, CellPoint.Y, CellPoint.Z);
 	}
 
+	/* Get subjects in a specific cage cell by position in the cage. */
+	FORCEINLINE const FBubbleCageCell&
+	At(const FIntVector& CellPoint) const
+	{
+		return At(CellPoint.X, CellPoint.Y, CellPoint.Z);
+	}
+
 	/* Get subjects in a specific cage cell by world 3d-location. */
 	FORCEINLINE FBubbleCageCell&
 	At(FVector Point)
+	{
+		return At(WorldToCage(Point));
+	}
+
+	/* Get subjects in a specific cage cell by world 3d-location. */
+	FORCEINLINE const FBubbleCageCell&
+	At(FVector Point) const
 	{
 		return At(WorldToCage(Point));
 	}
@@ -372,7 +476,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	UFUNCTION(BlueprintCallable)
 	static void Evaluate()
 	{
-		if (!Instance.IsValid()) return;
+		if (!Instance) return;
 		Instance->DoEvaluate();
 	}
 };

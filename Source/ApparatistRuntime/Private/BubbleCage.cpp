@@ -3,7 +3,7 @@
 #include "BubbleCage.h"
 
 
-TWeakObjectPtr<ABubbleCage> ABubbleCage::Instance;
+ABubbleCage* ABubbleCage::Instance = nullptr;
 
 TArray<FIntVector> ABubbleCage::NeighbourOffsets;
 
