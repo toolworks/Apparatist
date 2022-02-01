@@ -5,8 +5,6 @@
 
 ABubbleCage* ABubbleCage::Instance = nullptr;
 
-TArray<FIntVector> ABubbleCage::NeighbourOffsets;
-
 /* Sets default values. */
 ABubbleCage::ABubbleCage()
 {

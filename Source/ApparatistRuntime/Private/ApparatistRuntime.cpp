@@ -24,17 +24,6 @@ DEFINE_LOG_CATEGORY(LogApparatist);
 
 void FApparatistRuntimeModule::StartupModule()
 {
-	ABubbleCage::NeighbourOffsets.Reset(); // Just in case...
-	for (int32 i = 0; i < 3; ++i)
-	{
-		for (int32 j = 0; j < 3; ++j)
-		{
-			for (int32 k = 0; k < 3; ++k)
-			{
-				ABubbleCage::NeighbourOffsets.Add(FIntVector(i - 1, j - 1, k - 1));
-			}
-		}	
-	}
 }
 
 void FApparatistRuntimeModule::ShutdownModule()

@@ -49,13 +49,8 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		Super::BeginDestroy();
 	}
 
-
-
 	/* Call it before use (when the game starts or when spawned). */
 	void InitializeInternalState();
-
-	/* Neighbour cells of the cage. Useful for loop iteration. */
-	static TArray<FIntVector> NeighbourOffsets;
 
 	/* The size of one cell of the cage in the world units. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage")
@@ -104,7 +99,8 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	}
 
 	/* Convert world 3d-location to position in the cage. No checks. */
-	FORCEINLINE FIntVector WorldToCage(FVector Point) const
+	FORCEINLINE FIntVector
+	WorldToCage(FVector Point) const
 	{
 		Point -= Bounds.Min;
 		Point /= CellSize;
@@ -131,27 +127,35 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 				   TArray<FSubjectHandle>& OutOverlappers) const
 	{
 		OutOverlappers.Reset();
-		const auto CagePos  = WorldToCage(Location);
-		for (const auto& Offset : NeighbourOffsets)
+		const auto Range = FVector(LargestRadius);
+		const auto CagePosMin = WorldToCage(Location - Range);
+		const auto CagePosMax = WorldToCage(Location + Range);
+		for (auto i = CagePosMin.X; i <= CagePosMax.X; ++i)
 		{
-			const auto NeighbourCellPos = CagePos + Offset;
-			if (LIKELY(IsInside(NeighbourCellPos)))
+			for (auto j = CagePosMin.Y; j <= CagePosMax.Y; ++j)
 			{
-				const auto& NeighbourCell = At(NeighbourCellPos);
-				for (int32 j = 0; j < NeighbourCell.Subjects.Num(); ++j)
+				for (auto k = CagePosMin.Z; k <= CagePosMax.Z; ++k)
 				{
-					const auto OtherBubble = NeighbourCell.Subjects[j];
-					if (LIKELY(OtherBubble))
+					const auto NeighbourCellPos = FIntVector(i, j, k);
+					if (LIKELY(IsInside(NeighbourCellPos)))
 					{
-						const auto OtherBubbleSphere =
-							OtherBubble.GetTrait<FBubbleSphere>();
-						const auto OtherLocation =
-							OtherBubble.GetTrait<FLocated>().GetLocation();
-						const auto Delta = Location - OtherLocation;
-						const float Distance = Delta.Size();
-						if (OtherBubbleSphere.Radius > Distance)
+						const auto& NeighbourCell = At(NeighbourCellPos);
+						for (int32 t = 0; t < NeighbourCell.Subjects.Num(); ++t)
 						{
-							OutOverlappers.Add(OtherBubble);
+							const auto OtherBubble = NeighbourCell.Subjects[t];
+							if (LIKELY(OtherBubble))
+							{
+								const auto OtherBubbleSphere =
+									OtherBubble.GetTrait<FBubbleSphere>();
+								const auto OtherLocation =
+									OtherBubble.GetTrait<FLocated>().GetLocation();
+								const auto Delta = Location - OtherLocation;
+								const float Distance = Delta.Size();
+								if (OtherBubbleSphere.Radius > Distance)
+								{
+									OutOverlappers.Add(OtherBubble);
+								}
+							}
 						}
 					}
 				}
@@ -169,28 +173,36 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 				   TArray<FSubjectHandle>& OutOverlappers) const
 	{
 		OutOverlappers.Reset();
-		const auto CagePos  = WorldToCage(Location);
-		for (const auto& Offset : NeighbourOffsets)
+		const auto Range = FVector(Radius + LargestRadius);
+		const auto CagePosMin = WorldToCage(Location - Range);
+		const auto CagePosMax = WorldToCage(Location + Range);
+		for (auto i = CagePosMin.X; i <= CagePosMax.X; ++i)
 		{
-			const auto NeighbourCellPos = CagePos + Offset;
-			if (LIKELY(IsInside(NeighbourCellPos)))
+			for (auto j = CagePosMin.Y; j <= CagePosMax.Y; ++j)
 			{
-				const auto& NeighbourCell = At(NeighbourCellPos);
-				for (int32 j = 0; j < NeighbourCell.Subjects.Num(); ++j)
+				for (auto k = CagePosMin.Z; k <= CagePosMax.Z; ++k)
 				{
-					const auto OtherBubble = NeighbourCell.Subjects[j];
-					if (LIKELY(OtherBubble))
+					const auto NeighbourCellPos = FIntVector(i, j, k);
+					if (LIKELY(IsInside(NeighbourCellPos)))
 					{
-						const auto OtherBubbleSphere =
-							OtherBubble.GetTrait<FBubbleSphere>();
-						const auto OtherLocation =
-							OtherBubble.GetTrait<FLocated>().GetLocation();
-						const auto Delta = Location - OtherLocation;
-						const float Distance = Delta.Size();
-						const float DistanceDelta = (Radius + OtherBubbleSphere.Radius) - Distance;
-						if (DistanceDelta > 0)
+						const auto& NeighbourCell = At(NeighbourCellPos);
+						for (int32 t = 0; t < NeighbourCell.Subjects.Num(); ++t)
 						{
-							OutOverlappers.Add(OtherBubble);
+							const auto OtherBubble = NeighbourCell.Subjects[t];
+							if (LIKELY(OtherBubble))
+							{
+								const auto OtherBubbleSphere =
+									OtherBubble.GetTrait<FBubbleSphere>();
+								const auto OtherLocation =
+									OtherBubble.GetTrait<FLocated>().GetLocation();
+								const auto Delta = Location - OtherLocation;
+								const float Distance = Delta.Size();
+								const float DistanceDelta = (Radius + OtherBubbleSphere.Radius) - Distance;
+								if (DistanceDelta > 0)
+								{
+									OutOverlappers.Add(OtherBubble);
+								}
+							}
 						}
 					}
 				}
@@ -390,6 +402,10 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 				Subject.DespawnDeferred();
 				return;
 			}
+			if (LargestRadius < BubbleSphere.Radius)
+			{
+				LargestRadius = BubbleSphere.Radius;
+			}
 			const auto CellIndex = GetIndexAt(Location);
  			Cells[CellIndex].Subjects.Add((FSubjectHandle)Subject);
 #if BUBBLE_DEBUG
@@ -417,54 +433,62 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		 FBubbleSphere&      BubbleSphere)
 		{
 			const auto Location = Located.Location;
-			const auto CagePos  = WorldToCage(Location);
-			for (const auto& Offset : NeighbourOffsets)
+			const auto Range = FVector(BubbleSphere.Radius + LargestRadius);
+			const auto CagePosMin = WorldToCage(Location - Range);
+			const auto CagePosMax = WorldToCage(Location + Range);
+			for (auto i = CagePosMin.X; i <= CagePosMax.X; ++i)
 			{
-				const auto NeighbourCellPos = CagePos + Offset;
-				if (LIKELY(IsInside(NeighbourCellPos)))
+				for (auto j = CagePosMin.Y; j <= CagePosMax.Y; ++j)
 				{
-					const auto& NeighbourCell = At(NeighbourCellPos);
-					for (int32 j = 0; j < NeighbourCell.Subjects.Num(); ++j)
+					for (auto k = CagePosMin.Z; k <= CagePosMax.Z; ++k)
 					{
-						const auto OtherBubble = NeighbourCell.Subjects[j];
-						if (LIKELY(OtherBubble && (OtherBubble != Bubble)))
+						const auto NeighbourCellPos = FIntVector(i, j, k);
+						if (LIKELY(IsInside(NeighbourCellPos)))
 						{
-							const auto OtherBubbleSphere =
-								OtherBubble.GetTrait<FBubbleSphere>();
-							const auto OtherLocation =
-								OtherBubble.GetTrait<FLocated>().GetLocation();
-							const auto Delta = Location - OtherLocation;
-							const float Distance = Delta.Size();
-							const float DistanceDelta =
-								(BubbleSphere.Radius + OtherBubbleSphere.Radius) - Distance;
-							if (DistanceDelta > 0)
+							const auto& NeighbourCell = At(NeighbourCellPos);
+							for (int32 t = 0; t < NeighbourCell.Subjects.Num(); ++t)
 							{
-								if (UNLIKELY(Distance <= 0.01f))
+								const auto OtherBubble = NeighbourCell.Subjects[t];
+								if (LIKELY(OtherBubble && (OtherBubble != Bubble)))
 								{
-									// The distance is too small to get the direction.
-									// Use the ids to get the direction.
-									FVector RandVector{ FMath::FRand(), FMath::FRand(), FMath::FRand() };
+									const auto OtherBubbleSphere =
+										OtherBubble.GetTrait<FBubbleSphere>();
+									const auto OtherLocation =
+										OtherBubble.GetTrait<FLocated>().GetLocation();
+									const auto Delta = Location - OtherLocation;
+									const float Distance = Delta.Size();
+									const float DistanceDelta =
+										(BubbleSphere.Radius + OtherBubbleSphere.Radius) - Distance;
+									if (DistanceDelta > 0)
+									{
+										if (UNLIKELY(Distance <= 0.01f))
+										{
+											// The distance is too small to get the direction.
+											// Use the ids to get the direction.
+											FVector RandVector{ FMath::FRand(), FMath::FRand(), FMath::FRand() };
 
-									if (Bubble.GetId() > OtherBubble.GetId())
-									{
-										BubbleSphere.AccumulatedDecouple +=
-											RandVector * DistanceDelta *
-											0.5f;
-									}
-									else
-									{
-										BubbleSphere.AccumulatedDecouple +=
-											(-RandVector) * DistanceDelta *
-											0.5f;
+											if (Bubble.GetId() > OtherBubble.GetId())
+											{
+												BubbleSphere.AccumulatedDecouple +=
+													RandVector * DistanceDelta *
+													0.5f;
+											}
+											else
+											{
+												BubbleSphere.AccumulatedDecouple +=
+													(-RandVector) * DistanceDelta *
+													0.5f;
+											}
+										}
+										else
+										{
+											BubbleSphere.AccumulatedDecouple +=
+												(Delta / Distance) * DistanceDelta *
+												0.5f;
+										}
+										BubbleSphere.AccumulatedDecoupleCount += 1;
 									}
 								}
-								else
-								{
-									BubbleSphere.AccumulatedDecouple +=
-										(Delta / Distance) * DistanceDelta *
-										0.5f;
-								}
-								BubbleSphere.AccumulatedDecoupleCount += 1;
 							}
 						}
 					}
