@@ -45,7 +45,11 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		{
 			Instance = nullptr;
 		}
+		
+		Super::BeginDestroy();
 	}
+
+
 
 	/* Call it before use (when the game starts or when spawned). */
 	void InitializeInternalState();
