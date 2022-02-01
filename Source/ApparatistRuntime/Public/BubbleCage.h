@@ -30,6 +30,13 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 
 	static ABubbleCage* Instance;
 
+	/**
+	 * The largest radius among the bubbles.
+	 * 
+	 * Used for neighbour detection.
+	 */
+	float LargestRadius = 0;
+
   public:
 
 	void BeginDestroy() override
@@ -360,6 +367,8 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		}
 		OccupiedCells.Reset();
 
+		LargestRadius = 0;
+
 		// Occupy the cage cells...
 		auto Filter = FFilter::Make<FLocated, FBubbleSphere>();
 		Mechanism->EnchainSolid(Filter)->Operate([=]
@@ -367,7 +376,10 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		 const FLocated&      Located,
 		 const FBubbleSphere& BubbleSphere)
 		{
-			check(BubbleSphere.Radius * 2 <= CellSize);
+			if (LargestRadius < BubbleSphere.Radius)
+			{
+				LargestRadius = BubbleSphere.Radius;
+			}
 			const auto Location = Located.Location;
 			if (UNLIKELY(!IsInside(Location)))
 			{
