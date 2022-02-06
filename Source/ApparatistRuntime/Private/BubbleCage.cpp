@@ -15,6 +15,9 @@ ABubbleCage::ABubbleCage()
 void ABubbleCage::InitializeInternalState()
 {
 	Cells.Reset();
-	Cells.AddDefaulted(Size.X * Size.Y * Size.Z);
+	if (ensure((int64)Size.X * (int64)Size.Y * (int64)Size.Z < (int64)TNumericLimits<int32>::Max()))
+	{
+		Cells.AddDefaulted(Size.X * Size.Y * Size.Z);
+	}
 	FlushPersistentDebugLines(GetWorld());
 }
