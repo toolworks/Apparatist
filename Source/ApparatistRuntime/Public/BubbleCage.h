@@ -446,6 +446,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		 FLocated&           Located,
 		 FBubbleSphere&      BubbleSphere)
 		{
+			if (UNLIKELY(BubbleSphere.DecoupleProportion <= 0.0f)) return;
 			const auto Location = Located.Location;
 			const auto Range = FVector(BubbleSphere.Radius + LargestRadius);
 			const auto CagePosMin = WorldToCage(Location - Range);
@@ -473,32 +474,33 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 									const float Distance = Delta.Size();
 									const float DistanceDelta =
 										(BubbleSphere.Radius + OtherBubbleSphere.Radius) - Distance;
+									const float Strength = BubbleSphere.DecoupleProportion /
+														  (BubbleSphere.DecoupleProportion + OtherBubbleSphere.DecoupleProportion);
 									if (DistanceDelta > 0)
 									{
+										// We're hitting a neighbor.
 										if (UNLIKELY(Distance <= 0.01f))
 										{
 											// The distance is too small to get the direction.
 											// Use the ids to get the direction.
-											FVector RandVector{ FMath::FRand(), FMath::FRand(), FMath::FRand() };
-
 											if (Bubble.GetId() > OtherBubble.GetId())
 											{
 												BubbleSphere.AccumulatedDecouple +=
-													RandVector * DistanceDelta *
-													0.5f;
+													FVector::LeftVector * DistanceDelta *
+													Strength;
 											}
 											else
 											{
 												BubbleSphere.AccumulatedDecouple +=
-													(-RandVector) * DistanceDelta *
-													0.5f;
+													FVector::RightVector * DistanceDelta *
+													Strength;
 											}
 										}
 										else
 										{
 											BubbleSphere.AccumulatedDecouple +=
 												(Delta / Distance) * DistanceDelta *
-												0.5f;
+												Strength;
 										}
 										BubbleSphere.AccumulatedDecoupleCount += 1;
 									}
