@@ -26,15 +26,27 @@ struct APPARATISTRUNTIME_API FBubbleSphere
 	int32 CellIndex = -1;
 
 	/**
+	 * The decoupling strength.
+	 * 
+	 * This is a bit like a reciprocal of a mass.
+	 * The more this value is, the more
+	 * the sphere is decoupled from its neighbors
+	 * in proportion to their correcponding values.
+	 * 
+	 * Set to 0 to suppress the decoupling for this sphere.
+	 */
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "BubbleCage",
+			  Meta = (ClampMin="0"))
+	float DecoupleProportion = 1.0f;
+
+	/**
 	 * Accumulated decoupling force.
 	 */
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "BubbleCage")
 	FVector AccumulatedDecouple = FVector::ZeroVector;
 
 	/**
 	 * Number of accumulated decouples.
 	 */
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "BubbleCage")
 	int32 AccumulatedDecoupleCount = 0;
 
 	/* Default constructor. */
