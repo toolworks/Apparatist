@@ -2,10 +2,13 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "Containers/UnrealString.h"
 #include "CoreMinimal.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/Actor.h"
+#include "Containers/Queue.h"
 
 #include "SubjectiveActor.h"
 
@@ -52,6 +55,10 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	/* Call it before use (when the game starts or when spawned). */
 	void InitializeInternalState();
 
+	/* The number of threads to use for the concurrent processing. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage|Performance")
+	int32 ThreadsCount = 4;
+
 	/* The size of one cell of the cage in the world units. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage")
 	float CellSize = 1;
@@ -80,7 +87,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	TArray<FBubbleCageCell> Cells;
 
 	/* The indices of the cells that are currently occupied by the subjects. */
-	TSet<int32> OccupiedCells;
+	TQueue<int32, EQueueMode::Mpsc> OccupiedCells;
 
 	static FORCEINLINE ABubbleCage*
 	GetInstance()
@@ -377,17 +384,21 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
 
 		// Clear-up the cage...
-		for (auto Index : OccupiedCells)
+
+		int32 CellIndex;
+		while (OccupiedCells.Dequeue(CellIndex))
 		{
-			Cells[Index].Subjects.Empty();
+			Cells[CellIndex].Subjects.Empty();
 		}
-		OccupiedCells.Reset();
 
 		LargestRadius = 0;
 
 		// Occupy the cage cells...
 		auto Filter = FFilter::Make<FLocated, FBubbleSphere>();
-		Mechanism->EnchainSolid(Filter)->Operate([=]
+		// An atomic flag used for syncing the access to the
+		// subjects collection:
+		std::atomic_flag CollectingLock = ATOMIC_FLAG_INIT;
+		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=, &CollectingLock]
 		(FSolidSubjectHandle  Subject,
 		 const FLocated&      Located,
 		 const FBubbleSphere& BubbleSphere)
@@ -407,6 +418,8 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 				LargestRadius = BubbleSphere.Radius;
 			}
 			const auto CellIndex = GetIndexAt(Location);
+			while (CollectingLock.test_and_set(std::memory_order_acquire));
+			CollectingLock.clear(std::memory_order_release); 
  			Cells[CellIndex].Subjects.Add((FSubjectHandle)Subject);
 #if BUBBLE_DEBUG
 			const FBox CellBox = BoxAt(Location);
@@ -422,8 +435,9 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 				FString::Format(TEXT("Cell #{0}"),
 								FStringFormatOrderedArguments(CellIndex)));
 #endif
-			OccupiedCells.Add(CellIndex);
-		});
+			OccupiedCells.Enqueue(CellIndex);
+		}, ThreadsCount);
+
 		Mechanism->ApplyDeferreds();
 
 		// Detect collisions...
@@ -494,7 +508,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 					}
 				}
 			}
-		}, 4);
+		}, ThreadsCount);
 
 		// Decouple...
 		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=]
@@ -507,7 +521,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 				BubbleSphere.AccumulatedDecouple = FVector::ZeroVector;
 				BubbleSphere.AccumulatedDecoupleCount = 0;
 			}
-		}, 4);
+		}, ThreadsCount);
 	}
 
 	/* Calculate the collisions between subjects with BubbleSphere trait that
