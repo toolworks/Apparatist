@@ -468,7 +468,6 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 								const auto OtherBubble = NeighbourCell.Subjects[t];
 								if (LIKELY(OtherBubble && (OtherBubble != Bubble)))
 								{
-									check(OtherBubble.IsValid());
 									const auto OtherBubbleSphere =
 										OtherBubble.GetTrait<FBubbleSphere>();
 									const auto OtherLocation =
