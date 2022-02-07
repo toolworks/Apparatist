@@ -374,6 +374,8 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 		}
 	}
 
+	AMechanism* Mechanism = nullptr;
+
 	/* Calculate the collisions between subjects with BubbleSphere trait that
 	 * are positioned.
 	 */
@@ -381,7 +383,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 	{
 		QUICK_SCOPE_CYCLE_COUNTER(STAT_BubbleCage_Evaluate);
 
-		const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
+		Mechanism = UMachine::ObtainMechanism(GetWorld());
 
 		// Clear-up the cage...
 
@@ -466,6 +468,7 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 								const auto OtherBubble = NeighbourCell.Subjects[t];
 								if (LIKELY(OtherBubble && (OtherBubble != Bubble)))
 								{
+									check(OtherBubble.IsValid());
 									const auto OtherBubbleSphere =
 										OtherBubble.GetTrait<FBubbleSphere>();
 									const auto OtherLocation =
