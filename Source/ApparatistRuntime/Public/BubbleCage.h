@@ -421,8 +421,8 @@ class APPARATISTRUNTIME_API ABubbleCage : public ASubjectiveActor
 			}
 			const auto CellIndex = GetIndexAt(Location);
 			while (CollectingLock.test_and_set(std::memory_order_acquire));
-			CollectingLock.clear(std::memory_order_release); 
  			Cells[CellIndex].Subjects.Add((FSubjectHandle)Subject);
+			CollectingLock.clear(std::memory_order_release);
 #if BUBBLE_DEBUG
 			const FBox CellBox = BoxAt(Location);
 			DrawDebugBox(GetWorld(),
