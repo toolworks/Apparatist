@@ -3,6 +3,7 @@
 #include "TraitRendererComponent.h"
 
 #include "Located.h"
+#include "Oriented.h"
 #include "Rendering.h"
 
 
@@ -30,14 +31,14 @@ void UTraitRendererComponent::TickComponent(
 	const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
 
 	// Register the new subjects...
-	FFilter Filter(FLocated::StaticStruct());
+	FFilter Filter = FFilter::Make<FLocated, FOriented>();
 	Filter += TraitType;
 	Filter.Exclude<FRendering>();
 	Mechanism->Enchain(Filter)->Operate(
-	[=](FSubjectHandle Subject, FLocated Located)
+	[=](FSubjectHandle Subject, FLocated Located, FOriented Oriented)
 	{
 		FTransform SubjectTransform(
-			FQuat::Identity,
+			Oriented.Orientation.Rotation().Quaternion(),
 			Located.Location,
 			Scale);
 		
@@ -58,13 +59,13 @@ void UTraitRendererComponent::TickComponent(
 
 	// Update the positions...
 	ValidTransforms.Reset();
-	Filter = FFilter::Make<FLocated, FRendering>();
+	Filter = FFilter::Make<FLocated, FOriented, FRendering>();
 	Filter += TraitType;
 	Mechanism->Enchain(Filter)->Operate(
-	[=](FLocated Located, FRendering Rendering)
+	[=](FLocated Located, FOriented Oriented, FRendering Rendering)
 	{
 		FTransform SubjectTransform(
-			FQuat::Identity,
+			Oriented.Orientation.Rotation().Quaternion(),
 			Located.Location,
 			Scale);
 		ValidTransforms[Rendering.InstanceId] = true;
