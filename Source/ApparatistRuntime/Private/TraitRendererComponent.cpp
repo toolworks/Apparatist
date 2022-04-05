@@ -31,14 +31,19 @@ void UTraitRendererComponent::TickComponent(
 	const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
 
 	// Register the new subjects...
-	FFilter Filter = FFilter::Make<FLocated, FOriented>();
+	FFilter Filter = FFilter::Make<FLocated>();
 	Filter += TraitType;
 	Filter.Exclude<FRendering>();
 	Mechanism->Enchain(Filter)->Operate(
-	[=](FSubjectHandle Subject, FLocated Located, FOriented Oriented)
+	[=](FSubjectHandle Subject, FLocated Located)
 	{
+		FQuat Rotation{FQuat::Identity};
+		if (Subject.HasTrait<FOriented>())
+		{
+			Rotation = Subject.GetTrait<FOriented>().Orientation.Rotation().Quaternion();
+		}
 		FTransform SubjectTransform(
-			Oriented.Orientation.Rotation().Quaternion(),
+			Rotation,
 			Located.Location,
 			Scale);
 		
@@ -59,13 +64,18 @@ void UTraitRendererComponent::TickComponent(
 
 	// Update the positions...
 	ValidTransforms.Reset();
-	Filter = FFilter::Make<FLocated, FOriented, FRendering>();
+	Filter = FFilter::Make<FLocated, FRendering>();
 	Filter += TraitType;
 	Mechanism->Enchain(Filter)->Operate(
-	[=](FLocated Located, FOriented Oriented, FRendering Rendering)
+	[=](FSubjectHandle Subject, FLocated Located, FRendering Rendering)
 	{
+		FQuat Rotation{ FQuat::Identity };
+		if (Subject.HasTrait<FOriented>())
+		{
+			Rotation = Subject.GetTrait<FOriented>().Orientation.Rotation().Quaternion();
+		}
 		FTransform SubjectTransform(
-			Oriented.Orientation.Rotation().Quaternion(),
+			Rotation,
 			Located.Location,
 			Scale);
 		ValidTransforms[Rendering.InstanceId] = true;
