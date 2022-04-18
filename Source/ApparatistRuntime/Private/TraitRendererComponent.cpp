@@ -54,7 +54,7 @@ void UTraitRendererComponent::TickComponent(
 			Transforms.AddDefaulted_GetRef() = SubjectTransform;
 		}
 
-		Subject.SetTrait<FRendering>(FRendering(Id));
+		Subject.SetTrait(FRendering(Id));
 	});
 
 	// Update the positions...
