@@ -5,6 +5,7 @@
 #include "Located.h"
 #include "Oriented.h"
 #include "Rendering.h"
+#include "Scaled.h"
 
 
 UTraitRendererComponent::UTraitRendererComponent()
@@ -34,18 +35,23 @@ void UTraitRendererComponent::TickComponent(
 	FFilter Filter = FFilter::Make<FLocated>();
 	Filter += TraitType;
 	Filter.Exclude<FRendering>();
-	Mechanism->Enchain(Filter)->Operate(
-	[=](FSubjectHandle Subject, FLocated Located)
+	Mechanism->Enchain<FUnsafeChain>(Filter)->Operate(
+	[=](FUnsafeSubjectHandle Subject, const FLocated& Located, const FOriented* Oriented, const FScaled* Scaled)
 	{
 		FQuat Rotation{FQuat::Identity};
-		if (Subject.HasTrait<FOriented>())
+		if (Oriented)
 		{
-			Rotation = Subject.GetTrait<FOriented>().Orientation.Rotation().Quaternion();
+			Rotation = Oriented->Orientation.Rotation().Quaternion();
+		}
+		FVector FinalScale(Scale);
+		if (Scaled)
+		{
+			FinalScale *= Scaled->Factors;
 		}
 		FTransform SubjectTransform(
 			Rotation,
 			Located.Location,
-			Scale);
+			FinalScale);
 		
 		int32 Id = INDEX_NONE;
 		if (FreeTransforms.Num())
