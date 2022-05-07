@@ -8,7 +8,10 @@
 
 
 /**
- * Struct representing object positioned in BubbleCage.
+ * @brief The sphere-based collider.
+ * 
+ * @note The ::FScaled trait is not respected for efficiency reasons.
+ * You should thereby always scale the radius of this sphere manually.
  */
 USTRUCT(BlueprintType, Category = "BubbleCage")
 struct APPARATISTRUNTIME_API FBubbleSphere
@@ -17,13 +20,9 @@ struct APPARATISTRUNTIME_API FBubbleSphere
 
   public:
 
-	/* The radius of the circle. */
+	/// The radius of the sphere.
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage")
 	float Radius = 1;
-
-	/* The index in the cage. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage")
-	int32 CellIndex = -1;
 
 	/**
 	 * The decoupling strength.
@@ -39,14 +38,10 @@ struct APPARATISTRUNTIME_API FBubbleSphere
 			  Meta = (ClampMin="0"))
 	float DecoupleProportion = 1.0f;
 
-	/**
-	 * Accumulated decoupling force.
-	 */
+	/// The accumulated decoupling force.
 	FVector AccumulatedDecouple = FVector::ZeroVector;
 
-	/**
-	 * Number of accumulated decouples.
-	 */
+	/// The number of accumulated decouples.
 	int32 AccumulatedDecoupleCount = 0;
 
 	/* Default constructor. */
