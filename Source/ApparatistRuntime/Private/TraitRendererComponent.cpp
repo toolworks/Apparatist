@@ -72,18 +72,23 @@ void UTraitRendererComponent::TickComponent(
 	ValidTransforms.Reset();
 	Filter = FFilter::Make<FLocated, FRendering>();
 	Filter += TraitType;
-	Mechanism->Enchain(Filter)->Operate(
-	[=](FSubjectHandle Subject, FLocated Located, FRendering Rendering)
+	Mechanism->EnchainSolid(Filter)->Operate(
+	[=](FSolidSubjectHandle Subject, FLocated Located, FRendering Rendering, FOriented* Oriented, FScaled* Scaled)
 	{
 		FQuat Rotation{ FQuat::Identity };
-		if (Subject.HasTrait<FOriented>())
+		if (Oriented)
 		{
-			Rotation = Subject.GetTrait<FOriented>().Orientation.Rotation().Quaternion();
+			Rotation = Oriented->Orientation.Rotation().Quaternion();
+		}
+		FVector FinalScale(Scale);
+		if (Scaled)
+		{
+			FinalScale *= Scaled->Factors;
 		}
 		FTransform SubjectTransform(
 			Rotation,
 			Located.Location,
-			Scale);
+			FinalScale);
 		ValidTransforms[Rendering.InstanceId] = true;
 		Transforms[Rendering.InstanceId] = SubjectTransform;
 	});
