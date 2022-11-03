@@ -10,5 +10,6 @@ public class GoNorthUETarget : TargetRules
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V2;
 		ExtraModuleNames.Add("GoNorthUE");
+		ExtraModuleNames.Add("ApparatusRuntime");
 	}
 }
