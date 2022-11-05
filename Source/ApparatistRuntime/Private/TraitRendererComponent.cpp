@@ -4,6 +4,7 @@
 
 #include "Located.h"
 #include "Oriented.h"
+#include "Rotated.h"
 #include "Rendering.h"
 #include "Scaled.h"
 
@@ -36,12 +37,16 @@ void UTraitRendererComponent::TickComponent(
 	Filter += TraitType;
 	Filter.Exclude<FRendering>();
 	Mechanism->Enchain<FUnsafeChain>(Filter)->Operate(
-	[=](FUnsafeSubjectHandle Subject, const FLocated& Located, const FOriented* Oriented, const FScaled* Scaled)
+	[=](FUnsafeSubjectHandle Subject, const FLocated& Located, const FOriented* Oriented, const FRotated* Rotated, const FScaled* Scaled)
 	{
 		FQuat Rotation{FQuat::Identity};
 		if (Oriented)
 		{
 			Rotation = Oriented->Orientation.Rotation().Quaternion();
+		}
+		if (Rotated)
+		{
+			Rotation *= Rotated->Rotation;
 		}
 		FVector FinalScale(Scale);
 		if (Scaled)
@@ -73,12 +78,16 @@ void UTraitRendererComponent::TickComponent(
 	Filter = FFilter::Make<FLocated, FRendering>();
 	Filter += TraitType;
 	Mechanism->EnchainSolid(Filter)->Operate(
-	[=](FSolidSubjectHandle Subject, FLocated Located, FRendering Rendering, FOriented* Oriented, FScaled* Scaled)
+	[=](FSolidSubjectHandle Subject, FLocated Located, FRendering Rendering, FOriented* Oriented, FRotated* Rotated, FScaled* Scaled)
 	{
 		FQuat Rotation{ FQuat::Identity };
 		if (Oriented)
 		{
 			Rotation = Oriented->Orientation.Rotation().Quaternion();
+		}
+		if (Rotated)
+		{
+			Rotation *= Rotated->Rotation;
 		}
 		FVector FinalScale(Scale);
 		if (Scaled)
