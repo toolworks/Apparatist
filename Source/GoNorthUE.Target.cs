@@ -11,5 +11,6 @@ public class GoNorthUETarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V2;
 		ExtraModuleNames.Add("GoNorthUE");
 		ExtraModuleNames.Add("ApparatusRuntime");
+		ExtraModuleNames.Add("ApexDestruction");
 	}
 }
