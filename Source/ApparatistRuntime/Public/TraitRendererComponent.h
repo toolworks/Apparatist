@@ -54,6 +54,9 @@ class APPARATISTRUNTIME_API UTraitRendererComponent
 			  Category = "TraitRenderer")
 	FVector Scale = {1.0f, 1.0f, 1.0f};
 
+	void
+	EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
   public:
 
 	void

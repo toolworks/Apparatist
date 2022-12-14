@@ -15,6 +15,22 @@ UTraitRendererComponent::UTraitRendererComponent()
 	PrimaryComponentTick.bStartWithTickEnabled = true;
 }
 
+void UTraitRendererComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	FFilter Filter = FFilter::Make<FLocated, FRendering>();
+	Filter += TraitType;
+
+	if (EndPlayReason != EEndPlayReason::EndPlayInEditor)
+	{
+		const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
+		Mechanism->Enchain(Filter)->Operate(
+		[](FSubjectHandle Subject)
+		{
+			Subject.RemoveTrait<FRendering>();
+		});
+	}
+}
+
 void UTraitRendererComponent::TickComponent(
 	float DeltaTime, enum ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction)
@@ -23,6 +39,7 @@ void UTraitRendererComponent::TickComponent(
 
 	if (bFirstTick)
 	{
+		// Make sure there are no instances yet in the renderer...
 		while (GetInstanceCount())
 		{
 			RemoveInstance(0);
@@ -70,7 +87,7 @@ void UTraitRendererComponent::TickComponent(
 			Transforms.AddDefaulted_GetRef() = SubjectTransform;
 		}
 
-		Subject.SetTrait(FRendering(Id));
+		Subject.SetTrait(FRendering(this, Id));
 	});
 
 	// Update the positions...
@@ -104,8 +121,9 @@ void UTraitRendererComponent::TickComponent(
 
 	// Zero-down the unoccupied transforms...
 	FreeTransforms.Reset();
-	for (int32 i = ValidTransforms.IndexOf(false); i < Transforms.Num();
-		 i = ValidTransforms.IndexOf(false, i + 1))
+	for (int32 i = ValidTransforms.IndexOf(false); 
+			   i < Transforms.Num();
+			   i = ValidTransforms.IndexOf(false, i + 1))
 	{
 		FreeTransforms.Add(i);
 		Transforms[i].SetScale3D(FVector::ZeroVector);
