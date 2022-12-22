@@ -20,9 +20,10 @@ void UTraitRendererComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	FFilter Filter = FFilter::Make<FLocated, FRendering>();
 	Filter += TraitType;
 
-	if (EndPlayReason != EEndPlayReason::EndPlayInEditor)
+	const auto World = GetWorld();
+	if (World != nullptr && EndPlayReason != EEndPlayReason::EndPlayInEditor)
 	{
-		const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
+		const auto Mechanism = UMachine::ObtainMechanism(World);
 		Mechanism->Enchain(Filter)->Operate(
 		[](FSubjectHandle Subject)
 		{
