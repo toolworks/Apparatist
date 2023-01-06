@@ -1,0 +1,7 @@
+Binaries
+Intermediate
+Docs.Build
+Builds
+Pipfile.lock
+Docs.Src/*[.aux, .fls, .fdb_latexmk, .log]
+*.zip
