@@ -33,6 +33,18 @@ FTraitRecordDataCustomization::~FTraitRecordDataCustomization()
 	}
 }
 
+FName
+FTraitRecordDataCustomization::GetName() const
+{
+	if (!Name.IsNone()) return Name;
+	if (PropertyPath.IsEmpty())
+	{
+		PropertyPath = Property->GeneratePathToProperty();
+	}
+	Name = FName(PropertyPath);
+	return Name;
+}
+
 UScriptStruct*
 FTraitRecordDataCustomization::CalcEditedType() const
 {
@@ -406,7 +418,7 @@ FTraitRecordDataCustomization::GenerateChildContent(IDetailChildrenBuilder& Chil
 }
 
 FTraitRecordDataCustomization::FTraitRecordDataCustomization(TSharedRef<IPropertyHandle> InTraitRecordProp)
-  : Name(*InTraitRecordProp->GeneratePathToProperty())
+  : Name()
   , Property(InTraitRecordProp)
 {}
 

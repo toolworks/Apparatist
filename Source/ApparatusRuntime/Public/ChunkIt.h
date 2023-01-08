@@ -11,7 +11,7 @@
  * 
  * Community forums: https://talk.turbanov.ru
  * 
- * Copyright 2019 - 2022, SP Vladislav Dmitrievich Turbanov
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 
@@ -623,6 +623,123 @@ struct TChunkIt final
 	GetTraitRef() const
 	{
 		return GetTraitRef<Paradigm, T>();
+	}
+
+	/**
+	 * Get a trait pointer at a line index from a currently iterated subject.
+	 * 
+	 * Gets a trait from a currently iterated subject
+	 * by its index, relative to the current chunk's traitmark.
+	 * 
+	 * @tparam Paradigm The access safety paradigm.
+	 * @tparam T the typ of the trait to get.
+	 * @param TraitLineIndex The index of the trait line.
+	 * @return A pointer to the trait data.
+	 */
+	template < EParadigm Paradigm = EParadigm::Default, typename T >
+	FORCEINLINE TOutcome<Paradigm, T>
+	TraitAtLine(const int32 TraitLineIndex) const
+	{
+		check(TraitLineIndex >= 0);
+		if (AvoidFormat(Paradigm, !IsViable(), TEXT("The chunk iterator is not valid to get a trait pointer with hinting from. Is it at the end?")))
+		{
+			return MakeOutcome<Paradigm, T>(EApparatusStatus::InvalidState, T());
+		}
+		if (AvoidFormat(Paradigm, !Chunk->IsLocked(), TEXT("The iterator's chunk is not locked. Is the iterator used outside of its iteration loop?")))
+		{
+			return MakeOutcome<Paradigm, T>(EApparatusStatus::InvalidState, T());
+		}
+
+		const auto& Slot = Chunk->Slots[SlotIndex];
+		if (UNLIKELY(Slot.IsStale()))
+		{
+			// The subject was moved from the chunk or the hint is wrong.
+			// Get the data from its actual place (no reason for index-hinting here)...
+			return Slot.template GetHandle<SubjectHandleT>().template GetTrait<Paradigm, T>();
+		}
+
+		return MakeOutcome<Paradigm, T>(EApparatusStatus::Success, *((T*)(Chunk->TraitPtrAt(T::StaticStruct(), SlotIndex, TraitLineIndex))));
+	}
+
+	/**
+	 * Get a trait pointer at a line index from a currently iterated subject.
+	 * 
+	 * Gets a trait from a currently iterated subject
+	 * by its index, relative to the current chunk's traitmark.
+	 * 
+	 * @tparam Paradigm The access safety paradigm.
+	 * @param TraitType The type of the trait to get.
+	 * @param TraitLineIndex The index of the trait line.
+	 * @return A pointer to the trait data.
+	 */
+	template < EParadigm Paradigm = EParadigm::Default,
+			   TTraitVoidPtrResultSecurity<Paradigm> = 0 >
+	FORCEINLINE TOutcome<Paradigm, TTraitVoidPtrResult<Paradigm>>
+	TraitPtrAtLine(UScriptStruct* TraitType, const int32 TraitLineIndex) const
+	{
+		check(TraitLineIndex >= 0);
+		if (AvoidFormat(Paradigm, TraitType == nullptr, TEXT("A valid trait type must be provided.")))
+		{
+			return MakeOutcome<Paradigm, TTraitVoidPtrResult<Paradigm>>(EApparatusStatus::InvalidArgument, nullptr);
+		}
+		if (AvoidFormat(Paradigm, !IsViable(), TEXT("The chunk iterator is not valid to get a trait pointer with hinting from. Is it at the end?")))
+		{
+			return MakeOutcome<Paradigm, TTraitVoidPtrResult<Paradigm>>(EApparatusStatus::InvalidState, nullptr);
+		}
+		if (AvoidFormat(Paradigm, !Chunk->IsLocked(), TEXT("The iterator's chunk is not locked. Is the iterator used outside of its iteration loop?")))
+		{
+			return MakeOutcome<Paradigm, TTraitVoidPtrResult<Paradigm>>(EApparatusStatus::InvalidState, nullptr);
+		}
+
+		const auto& Slot = Chunk->Slots[SlotIndex];
+		if (UNLIKELY(Slot.IsStale()))
+		{
+			// The subject was moved from the chunk or the hint is wrong.
+			// Get the data from its actual place (no reason for index-hinting here)...
+			return Slot.template GetHandle<SubjectHandleT>().template GetTraitPtr<Paradigm>(TraitType);
+		}
+
+		return Chunk->TraitPtrAt(TraitType, SlotIndex, TraitLineIndex);
+	}
+
+	/**
+	 * Get a trait pointer at a line index from a currently iterated subject.
+	 * Templated version.
+	 * 
+	 * Gets a trait from a currently iterated subject
+	 * by its index, relative to the current chunk's traitmark.
+	 * 
+	 * @tparam Paradigm The access safety paradigm.
+	 * @tparam T The type of the trait to get.
+	 * @param TraitLineIndex The index of the trait line to get from.
+	 * @return A pointer to the trait data.
+	 */
+	template < EParadigm Paradigm, typename T,
+			   TTraitPtrResultSecurity<Paradigm, T> = 0 >
+	FORCEINLINE TOutcome<Paradigm, TTraitPtrResult<Paradigm, T>>
+	TraitPtrAtLine(const int32 TraitLineIndex) const
+	{
+		return OutcomeStaticCast<TTraitPtrResult<Paradigm, T>>(TraitPtrAtLine<Paradigm>(T::StaticStruct(), TraitLineIndex));
+	}
+
+	/**
+	 * Get a trait reference at a line index from a currently iterated subject.
+	 * Templated version.
+	 * 
+	 * Gets a trait from a currently iterated subject
+	 * by its index, relative to the current chunk's traitmark.
+	 * 
+	 * @tparam Paradigm The access safety paradigm.
+	 * @tparam T The type of the trait to get.
+	 * @param TraitLineIndex The index of the trait line to get from.
+	 * @return A pointer to the trait data.
+	 */
+	template < EParadigm Paradigm, typename T,
+			   TTraitRefResultSecurity<Paradigm, T> = 0 >
+	FORCEINLINE TOutcome<Paradigm, TTraitRefResult<Paradigm, T>>
+	TraitRefAtLine(const int32 TraitLineIndex) const
+	{
+		return OutcomeDereference(TraitPtrAtLine<Paradigm, T>(TraitLineIndex));
 	}
 
 	/// @}

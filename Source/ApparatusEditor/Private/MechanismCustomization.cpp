@@ -26,9 +26,16 @@
 #include "SubjectRecordCollection.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Widgets/Input/SButton.h"
+#include "UObject/SavePackage.h"
+
+#if ENGINE_MAJOR_VERSION >= 5
+#include "Styling/AppStyle.h"
+#else
+#include "EditorStyleSet.h"
+#endif
+
 
 #define LOCTEXT_NAMESPACE "FMechanismCustomization"
-
 
 TSharedRef<IDetailCustomization> FMechanismCustomization::MakeInstance()
 {
@@ -69,7 +76,9 @@ void FMechanismCustomization::CustomizeDetails(IDetailLayoutBuilder& DetailBuild
 					const auto Collection = NewObject<USubjectRecordCollection>(Package, *CollectionName, EObjectFlags::RF_Public | EObjectFlags::RF_Standalone);
 					Mechanism->CollectSubjects(Collection, Mechanism->DumpingFilter, FM_All);
 					FString PackageFileName = FPackageName::LongPackageNameToFilename(*PackageName, FPackageName::GetAssetPackageExtension());
-					UPackage::SavePackage(Package, Collection, RF_Standalone, *PackageFileName);
+					FSavePackageArgs SaveArgs = {};
+					SaveArgs.TopLevelFlags = RF_Standalone;
+					UPackage::SavePackage(Package, Collection, *PackageFileName, SaveArgs);
 				}),
 				FOnAssetDialogCancelled::CreateLambda([](){}));
 		}
@@ -92,7 +101,11 @@ void FMechanismCustomization::CustomizeDetails(IDetailLayoutBuilder& DetailBuild
 		[
 			SNew(SButton)
 			.Text(LOCTEXT("DumpSubjectsButtonTitle", "Dump to File..."))
+#if ENGINE_MAJOR_VERSION >= 5
+			.TextStyle(FAppStyle::Get(), "SmallText")
+#else
 			.TextStyle(FEditorStyle::Get(), "SmallText")
+#endif			
 			.ToolTipText(LOCTEXT("DumpSubjectsButtonTooltip", "Dump all of the mechanism's subjects to a record collection asset."))
 			.OnClicked_Lambda(OnDump)
 		];

@@ -11,7 +11,7 @@
  * 
  * Community forums: https://talk.turbanov.ru
  * 
- * Copyright 2019 - 2022, SP Vladislav Dmitrievich Turbanov
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 
@@ -104,8 +104,12 @@ UMachine::DoReset()
 		StatusAccumulate(Status, EApparatusStatus::Success);
 	}
 
-	// Network id counter....
-	NextNetworkId = FSubjectNetworkState::FirstId;
+	// Clear the network identifier assignment state....
+	{
+		FScopeLock Lock(&NetworkIdsCS);
+		NetworkIdsPools.Reset();
+		NextNetworkId = FSubjectNetworkState::FirstId;
+	}
 
 	// The self is no longer needed for sure...
 	check(!ShouldBeRetained());

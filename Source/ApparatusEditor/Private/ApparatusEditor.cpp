@@ -11,7 +11,7 @@
  * 
  * Community forums: https://talk.turbanov.ru
  * 
- * Copyright 2019 - 2022, SP Vladislav Dmitrievich Turbanov
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 
@@ -71,7 +71,11 @@ class FApparatusDatabaseActions : public FAssetTypeActions_Base
 	virtual void BuildBackendFilter(FARFilter& InFilter) override
 	{
 		// Add the supported class for this type to a filter
+#if ENGINE_MAJOR_VERSION >= 5 && ENGINE_MINOR_VERSION >= 1
+		InFilter.ClassPaths.Add(GetSupportedClass()->GetClassPathName());
+#else
 		InFilter.ClassNames.Add(GetSupportedClass()->GetFName());
+#endif
 		InFilter.bRecursiveClasses = true;
 	}
 

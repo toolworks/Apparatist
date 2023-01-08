@@ -11,7 +11,7 @@
  * 
  * Community forums: https://talk.turbanov.ru
  * 
- * Copyright 2019 - 2022, SP Vladislav Dmitrievich Turbanov
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 /**
@@ -741,6 +741,15 @@ struct THarshOutcome
 	}
 
 	/**
+	 * Dereference.
+	 */
+	FORCEINLINE THarshOutcome<PayloadT&>
+	Dereference()
+	{
+		return THarshOutcome<PayloadT&>(Payload);
+	}
+
+	/**
 	 * Convert to a successful status.
 	 * 
 	 * This operation should always be an explicit
@@ -1082,6 +1091,16 @@ struct THarshOutcome<PayloadT*>
 	StaticCast()
 	{
 		return THarshOutcome<T>(static_cast<T>(Payload));
+	}
+
+	/**
+	 * Dereference.
+	 */
+	template < typename T = PayloadT, more::enable_if_t<!std::is_void<std::decay_t<T>>::value, bool> = true >
+	FORCEINLINE THarshOutcome<T&>
+	Dereference()
+	{
+		return THarshOutcome<T&>(*Payload);
 	}
 
 	/**
@@ -1594,6 +1613,15 @@ struct TPoliteOutcome
 	}
 
 	/**
+	 * Dereference.
+	 */
+	FORCEINLINE TPoliteOutcome<PayloadT&>
+	Dereference()
+	{
+		return TPoliteOutcome<PayloadT&>(Status, Payload);
+	}
+
+	/**
 	 * Convert to a status.
 	 *
 	 * This is an explicit conversion
@@ -1952,6 +1980,16 @@ struct TPoliteOutcome<PayloadT*>
 	StaticCast()
 	{
 		return TPoliteOutcome<T>(Status, static_cast<T>(Payload));
+	}
+
+	/**
+	 * Dereference.
+	 */
+	template < typename T = PayloadT, more::enable_if_t<!std::is_void<std::decay_t<T>>::value, bool> = true >
+	FORCEINLINE TPoliteOutcome<T&>
+	Dereference()
+	{
+		return TPoliteOutcome<T&>(Status, *Payload);
 	}
 
 	/**
@@ -3169,6 +3207,90 @@ constexpr FORCEINLINE auto
 OutcomeStaticCast(PayloadT* const Payload)
 {
 	return static_cast<To>(Payload);
+}
+
+/**
+ * Convert a harsh outcome to a status.
+ * 
+ * @tparam PayloadT The type of the payload of the outcome.
+ * @param Outcome The outcome to convert.
+ * @return The successful status.
+ */
+template < typename PayloadT >
+FORCEINLINE PayloadT&
+OutcomeDereference(const THarshOutcome<PayloadT*>& Outcome)
+{
+	return Outcome.template Dereference();
+}
+
+/**
+ * Convert a polite outcome to a status.
+ * 
+ * @tparam PayloadT The type of the payload of the outcome.
+ * @param Outcome The outcome to convert.
+ * @return The outcome status.
+ */
+template < typename PayloadT >
+FORCEINLINE PayloadT&
+OutcomeDereference(const TPoliteOutcome<PayloadT*>& Outcome)
+{
+	return Outcome.template Dereference();
+}
+
+/**
+ * Convert a harsh outcome to a status.
+ * 
+ * @tparam PayloadT The type of the payload of the outcome.
+ * @param Outcome The outcome to convert.
+ * @return The successful status.
+ */
+template < typename PayloadT >
+FORCEINLINE PayloadT&
+OutcomeDereference(const THarshOutcome<PayloadT>& Outcome)
+{
+	return Outcome.Dereference();
+}
+
+/**
+ * Convert a polite outcome to a status.
+ * 
+ * @tparam PayloadT The type of the payload of the outcome.
+ * @param Outcome The outcome to convert.
+ * @return The outcome status.
+ */
+template < typename PayloadT >
+FORCEINLINE PayloadT&
+OutcomeDereference(const TPoliteOutcome<PayloadT>& Outcome)
+{
+	return Outcome.Dereference();
+}
+
+/**
+ * Statically cast a generic payload pointer.
+ * 
+ * @tparam PayloadT The type of the payload.
+ * @param Payload The payload to cast.
+ * @return The payload being cast.
+ */
+template < typename PayloadT >
+FORCEINLINE PayloadT&
+OutcomeDereference(PayloadT& Payload)
+{
+	return Payload;
+}
+
+/**
+ * Statically cast a generic payload pointer.
+ * 
+ * @tparam PayloadT The type of the payload.
+ * @param Payload The payload to cast.
+ * @return The payload being cast.
+ */
+template < typename PayloadT >
+FORCEINLINE PayloadT&
+OutcomeDereference(PayloadT* const Payload)
+{
+	return *Payload;
 }
 
 #pragma endregion Universal Static Cast

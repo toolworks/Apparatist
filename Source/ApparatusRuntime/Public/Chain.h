@@ -11,7 +11,7 @@
  *
  * Community forums: https://talk.turbanov.ru
  *
- * Copyright 2019 - 2022, SP Vladislav Dmitrievich Turbanov
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 
@@ -329,7 +329,7 @@ struct TChain final
 						// Fetch the actual mapping to use.
 						if (sizeof...(Ps) > 0) // Compile-time branch.
 						{
-							Mapping = MappingType({Chunk->template TraitLineIndexOf<Ps>()...});
+							Mapping = MappingType({Chunk->template TraitLineIndexOf<more::flatten_t<Ps>>()...});
 						}
 						else
 						{
@@ -505,7 +505,7 @@ struct TChain final
 		FORCEINLINE int32
 		RemapPartIndex(const int32 PartIndex) const
 		{
-			if (RemappingParadigm > EParadigm::Internal) // Compile-time branch.
+			if (IsSafe(RemappingParadigm)) // Compile-time branch.
 			{
 				if (UNLIKELY(PartIndex < 0 || PartIndex >= GetPartMappingSize()))
 				{
@@ -896,10 +896,11 @@ struct TChain final
 		{
 			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait pointer. "
 							   "Has it already done its iterating and released the chain?"));
-
-			if (more::is_contained_flatly<T, Ps...>::value) // Compile-time branch.
+			// Check if the trait is guaranteed to be within the subject:
+			static constexpr bool bTraitGuaranteed = more::is_contained_flatly<T, Ps...>::value;
+			if (bTraitGuaranteed) // Compile-time branch.
 			{
-				return GetTraitPtrHinted<Paradigm, T>(more::index_within_flatly<T, Ps...>::value);
+				return TraitPtrAtLine<Paradigm, T, more::index_within_flatly<T, Ps...>::value>();
 			}
 			switch (Iterator.GetIndex())
 			{
@@ -941,10 +942,11 @@ struct TChain final
 		{
 			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait reference hinted. "
 							   "Has it already done its iterating and released the chain?"));
-
-			if (more::is_contained_flatly<T, Ps...>::value) // Compile-time branch.
+			// Check if the trait is guaranteed to be within the subject:
+			static constexpr bool bTraitGuaranteed = more::is_contained_flatly<T, Ps...>::value;
+			if (bTraitGuaranteed) // Compile-time branch.
 			{
-				return GetTraitRefHinted<Paradigm, T>(more::index_within_flatly<T, Ps...>::value);
+				return TraitRefAtLine<Paradigm, T, more::index_within_flatly<T, Ps...>::value>();
 			}
 			switch (Iterator.GetIndex())
 			{
@@ -984,10 +986,11 @@ struct TChain final
 		{
 			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait. "
 							   "Has it already done its iterating and released the chain?"));
-
-			if (more::is_contained_flatly<T, Ps...>::value) // Compile-time branch.
+			// Check if the trait is guaranteed to be within the subject:
+			static constexpr bool bTraitGuaranteed = more::is_contained_flatly<T, Ps...>::value;
+			if (bTraitGuaranteed) // Compile-time branch.
 			{
-				return GetTraitHinted<Paradigm, T>(more::index_within_flatly<T, Ps...>::value);
+				return TraitAtLine<Paradigm, T, more::index_within_flatly<T, Ps...>::value>();
 			}
 			switch (Iterator.GetIndex())
 			{
@@ -1053,7 +1056,9 @@ struct TChain final
 		{
 			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait. "
 							   "Has it already done its iterating and released the chain?"));
-			if (more::is_contained_flatly<T, Ps...>::value) // Compile-time branch.
+			// Check if the trait is guaranteed to be within the subject:
+			static constexpr bool bTraitGuaranteed = more::is_contained_flatly<T, Ps...>::value;
+			if (bTraitGuaranteed) // Compile-time branch.
 			{
 				return GetTraitHinted<Paradigm, T>(more::index_within_flatly<T, Ps...>::value, OutTraitData, bTraitDataInitialized);
 			}
@@ -1081,6 +1086,102 @@ struct TChain final
 				 const bool bTraitDataInitialized = true) const
 		{
 			return GetTrait<Paradigm>(OutTraitData, bTraitDataInitialized);
+		}
+
+		/**
+		 * Get a copy of a trait of a certain type with an index hint.
+		 * 
+		 * The trait index hint is relative to the parts pack or the traitmark of the filter.
+		 */
+		template < EParadigm Paradigm, typename T, int32 TraitLineIndex >
+		FORCEINLINE TOutcome<Paradigm, T>
+		TraitAtLine() const
+		{
+			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait hinted. "
+							   "Has it already done its iterating and released the chain?"));
+			switch (Iterator.GetIndex())
+			{
+				case ChunkItIndex:
+					if (TraitLineIndex >= 0)
+						return Iterator.template Get<ChunkItType>()
+							.template TraitAtLine<Paradigm, T>(RemapPartIndex<EParadigm::Unsafe>(TraitLineIndex));
+					else
+						return Iterator.template Get<ChunkItType>()
+							.template GetTrait<Paradigm, T>();
+				case BeltItIndex: return Iterator.template Get<BeltItType>()
+					.template GetTrait<Paradigm, T>();
+				default: 
+				{
+					checkNoEntry();
+					return T();
+				}
+			}
+		}
+
+		/**
+		 * Get a pointer to a trait of a certain type with an index hint.
+		 * Templated version.
+		 * 
+		 * The trait index hint is relative to the parts pack or the traitmark of the filter.
+		 */
+		template < EParadigm Paradigm, typename T, int32 TraitLineIndex,
+				   more::enable_if_t<IsUnsafe(Paradigm) || AllowsDirectTraitAccess, int> = 0 >
+		FORCEINLINE TOutcome<Paradigm, TTraitPtrResult<Paradigm, T>>
+		TraitPtrAtLine() const
+		{
+			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait pointer hinted. "
+							   "Has it already done its iterating and released the chain?"));
+			switch (Iterator.GetIndex())
+			{
+				case ChunkItIndex: 
+					if (TraitLineIndex >= 0)
+					{
+						const auto RealLineIndex = RemapPartIndex<EParadigm::Unsafe>(TraitLineIndex);
+						if (RealLineIndex >= 0)
+							return Iterator.template Get<ChunkItType>()
+								.template TraitPtrAtLine<Paradigm, T>(RealLineIndex);
+					}
+					return Iterator.template Get<ChunkItType>()
+						.template GetTraitPtr<Paradigm, T>();
+				case BeltItIndex: return Iterator.template Get<BeltItType>()
+					.template GetTraitPtr<Paradigm, T>();
+				default: 
+				{
+					checkNoEntry();
+					return nullptr;
+				}
+			}
+		}
+
+		/**
+		 * Get a trait of a certain type with an index hint.
+		 * 
+		 * The trait index hint is relative to the parts pack or the traitmark of the filter.
+		 */
+		template < EParadigm Paradigm, typename T, int32 TraitLineIndex,
+				   more::enable_if_t<IsUnsafe(Paradigm) || AllowsDirectTraitAccess, int> = 0 >
+		FORCEINLINE TOutcome<Paradigm, TTraitRefResult<Paradigm, T>>
+		TraitRefAtLine() const
+		{
+			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait reference hinted. "
+							   "Has it already done its iterating and released the chain?"));
+			switch (Iterator.GetIndex())
+			{
+				case ChunkItIndex: 
+					if (TraitLineIndex >= 0)
+						return Iterator.template Get<ChunkItType>()
+							.template TraitRefAtLine<Paradigm, T>(RemapPartIndex<EParadigm::Unsafe>(TraitLineIndex));
+					else
+						return Iterator.template Get<ChunkItType>()
+							.template GetTraitRef<Paradigm, T>();
+				case BeltItIndex: return Iterator.template Get<BeltItType>()
+					.template GetTraitRef<Paradigm, T>();
+				default: 
+				{
+					checkNoEntry();
+					return *(new T());
+				}
+			}
 		}
 
 		/**
@@ -1123,6 +1224,12 @@ struct TChain final
 		{
 			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait pointer hinted. "
 							   "Has it already done its iterating and released the chain?"));
+			// Check if the trait is guaranteed to be within the subject:
+			static constexpr bool bTraitGuaranteed = more::is_contained_flatly<T, Ps...>::value;
+			if (bTraitGuaranteed) // Compile-time branch.
+			{
+				return TraitPtrAtLine<Paradigm, T, more::index_within_flatly<T, Ps...>::value>();
+			}
 			switch (Iterator.GetIndex())
 			{
 				case ChunkItIndex: return Iterator.template Get<ChunkItType>()
@@ -1163,6 +1270,12 @@ struct TChain final
 		{
 			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait reference hinted. "
 							   "Has it already done its iterating and released the chain?"));
+			// Check if the trait is guaranteed to be within the subject:
+			static constexpr bool bTraitGuaranteed = more::is_contained_flatly<T, Ps...>::value;
+			if (bTraitGuaranteed) // Compile-time branch.
+			{
+				return TraitRefAtLine<Paradigm, T, more::index_within_flatly<T, Ps...>::value>();
+			}
 			switch (Iterator.GetIndex())
 			{
 				case ChunkItIndex: return Iterator.template Get<ChunkItType>()
@@ -1201,6 +1314,12 @@ struct TChain final
 		{
 			checkf(Owner, TEXT("The cursor must have an owner in order to get a trait hinted. "
 							   "Has it already done its iterating and released the chain?"));
+			// Check if the trait is guaranteed to be within the subject:
+			static constexpr bool bTraitGuaranteed = more::is_contained_flatly<T, Ps...>::value;
+			if (bTraitGuaranteed) // Compile-time branch.
+			{
+				return TraitAtLine<Paradigm, T, more::index_within_flatly<T, Ps...>::value>();
+			}
 			switch (Iterator.GetIndex())
 			{
 				case ChunkItIndex: return Iterator.template Get<ChunkItType>()
@@ -2334,9 +2453,9 @@ struct TChain final
 			switch (Iterator.GetIndex())
 			{
 				case ChunkItIndex: return Iterator.template Get<ChunkItType>().GetChunk()
-					->template TraitLineIndexOf<P>();
+					->template TraitLineIndexOf<more::flatten_t<P>>();
 				case BeltItIndex: return Iterator.template Get<BeltItType>().GetBelt()
-					->template DetailLineIndexOf<P>();
+					->template DetailLineIndexOf<more::flatten_t<P>>();
 				default: 
 				{
 					return INDEX_NONE;
@@ -2434,7 +2553,7 @@ struct TChain final
 						const auto Chunk = Iterator.template Get<ChunkItType>().GetChunk();
 						if (sizeof...(Ps) > 0) // Compile-time branch.
 						{
-							Mapping = MappingType({Chunk->template TraitLineIndexOf<Ps>()...});
+							Mapping = MappingType({Chunk->template TraitLineIndexOf<more::flatten_t<Ps>>()...});
 						}
 						else
 						{

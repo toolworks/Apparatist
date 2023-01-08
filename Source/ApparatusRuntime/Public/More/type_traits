@@ -11,7 +11,7 @@
  * 
  * Community forums: https://talk.turbanov.ru
  * 
- * Copyright 2019 - 2022, SP Vladislav Dmitrievich Turbanov
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 /**

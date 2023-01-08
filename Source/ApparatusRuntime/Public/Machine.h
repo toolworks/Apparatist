@@ -11,7 +11,7 @@
  * 
  * Community forums: https://talk.turbanov.ru
  * 
- * Copyright 2019 - 2022, SP Vladislav Dmitrievich Turbanov
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 
@@ -1594,6 +1594,9 @@ class APPARATUSRUNTIME_API UMachine
 	 * Reset the machine completely,
 	 * removing all of the subjects, unregistering
 	 * all of the parts.
+	 * 
+	 * This will also clear up the network id assignment state
+	 * for the subjects completely.
 	 * 
 	 * @note This won't automatically trigger the
 	 * release of the machine, which must be

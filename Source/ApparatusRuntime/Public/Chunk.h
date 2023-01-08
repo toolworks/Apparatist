@@ -11,7 +11,7 @@
  *
  * Community forums: https://talk.turbanov.ru
  *
- * Copyright 2019 - 2022, SP Vladislav Dmitrievich Turbanov
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 
@@ -1027,6 +1027,26 @@ class APPARATUSRUNTIME_API UChunk
 	TraitPtrAt(const int32 SlotIndex,
 			   const int32 LineIndex)
 	{
+		check(SlotIndex != InvalidSlotIndex);
+		check(LineIndex != InvalidTraitLineIndex);
+		return Lines[LineIndex][SlotIndex];
+	}
+
+/**
+	 * Get the trait data pointer given subject's index and a line index.
+	 * Generic mutable data version.
+	 * 
+	 * @param TraitTypeCheck The type to check.
+	 * @param SlotIndex An index of the subject slot.
+	 * @param LineIndex An index of the line.
+	 * @return The data of the trait.
+	 */
+	FORCEINLINE void*
+	TraitPtrAt(UScriptStruct* const TraitTypeCheck,
+			   const int32          SlotIndex,
+			   const int32          LineIndex)
+	{
+		check(TraitLineTypeAt(LineIndex) == TraitTypeCheck);
 		check(SlotIndex != InvalidSlotIndex);
 		check(LineIndex != InvalidTraitLineIndex);
 		return Lines[LineIndex][SlotIndex];

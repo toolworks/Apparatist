@@ -25,7 +25,7 @@ class APPARATUSEDITOR_API FTraitRecordDataCustomization
 	/**
 	 * A unique name used to save the expansion state.
 	 */
-	FName Name;
+	mutable FName Name;
 
 	/**
 	 * The trait record property in question.
@@ -37,7 +37,7 @@ class APPARATUSEDITOR_API FTraitRecordDataCustomization
 	 * 
 	 * Used within the transferring workaround.
 	 */
-	FString PropertyPath;
+	mutable FString PropertyPath;
 
 	/**
 	 * The editable data representation.
@@ -114,10 +114,7 @@ class APPARATUSEDITOR_API FTraitRecordDataCustomization
 	 * the expansion state.
 	 */
 	FName
-	GetName() const override
-	{
-		return Name;
-	}
+	GetName() const override;
 
 	/**
 	 * Get the unified currently edited type.

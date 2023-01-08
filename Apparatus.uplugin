@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 31,
-	"VersionName": "1.22.1",
+	"Version": 32,
+	"VersionName": "1.23.0",
 	"FriendlyName": "Apparatus",
 	"Description": "Native ECS data-oriented workflow.",
 	"Category": "Workflow",
