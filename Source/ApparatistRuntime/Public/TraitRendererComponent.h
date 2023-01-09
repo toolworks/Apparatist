@@ -36,29 +36,32 @@ class APPARATISTRUNTIME_API UTraitRendererComponent
 	 */
 	TArray<int32> FreeTransforms;
 
-
 	bool bFirstTick = true;
 
   protected:
 
-	/* This trait tells to the Renderer which objects it should render.
-	 *   Please, for efficiency never give to different Renderers same
-	 * TraitTypes.
+	/**
+	 * The type of the trait that should trigger its instance to be rendered.
 	 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, NoClear,
 			  Category = "TraitRenderer")
 	UScriptStruct* TraitType = nullptr;
 
-	/* Scale with which to render objects. */
+	/**
+	 * The global scale for the rendered instances.
+	 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, 
 			  Category = "TraitRenderer")
 	FVector Scale = {1.0f, 1.0f, 1.0f};
 
-  public:
+	void
+	EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	void
 	TickComponent(float DeltaTime, enum ELevelTick TickType,
 				  FActorComponentTickFunction* ThisTickFunction) override;
+
+  public:
 
 	UTraitRendererComponent();
 };

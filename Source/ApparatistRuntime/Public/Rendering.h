@@ -7,9 +7,12 @@
 #include "Rendering.generated.h"
 
 
+// Forward declarations:
+class UTraitRendererComponent;
+
 /**
- * Struct representing a render buffer state of the object,
- * when the object currently rendering.
+ * Struct representing a render buffer state of the subject,
+ * when the it is currently rendering.
  */
 USTRUCT(Category = "TraitRenderer")
 struct APPARATISTRUNTIME_API FRendering
@@ -18,14 +21,25 @@ struct APPARATISTRUNTIME_API FRendering
 
   public:
 
-	/* The unique identifier of the object. */
+	/**
+	 * The owning trait renderer component.
+	 */
+	UTraitRendererComponent* Owner = nullptr;
+
+	/**
+	 * The unique identifier of the object. 
+	 */
 	int32 InstanceId = -1;
 
 	/* Default constructor. */
 	FRendering() {}
 
-	/* Constructor with all variables specified. */
-	FRendering(const int32 InInstanceId)
-	  : InstanceId(InInstanceId)
+	/**
+	 * Initialize a new rendering instance.
+	 */
+	FRendering(UTraitRendererComponent* const InOwner,
+			   const int32                    InInstanceId)
+	  : Owner(InOwner)
+	  , InstanceId(InInstanceId)
 	{}
 };

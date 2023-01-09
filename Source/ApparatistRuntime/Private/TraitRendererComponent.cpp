@@ -4,6 +4,7 @@
 
 #include "Located.h"
 #include "Oriented.h"
+#include "Rotated.h"
 #include "Rendering.h"
 #include "Scaled.h"
 
@@ -14,6 +15,22 @@ UTraitRendererComponent::UTraitRendererComponent()
 	PrimaryComponentTick.bStartWithTickEnabled = true;
 }
 
+void UTraitRendererComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	FFilter Filter = FFilter::Make<FLocated, FRendering>();
+	Filter += TraitType;
+
+	if (EndPlayReason != EEndPlayReason::EndPlayInEditor)
+	{
+		const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
+		Mechanism->Enchain(Filter)->Operate(
+		[](FSubjectHandle Subject)
+		{
+			Subject.RemoveTrait<FRendering>();
+		});
+	}
+}
+
 void UTraitRendererComponent::TickComponent(
 	float DeltaTime, enum ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction)
@@ -22,6 +39,7 @@ void UTraitRendererComponent::TickComponent(
 
 	if (bFirstTick)
 	{
+		// Make sure there are no instances yet in the renderer...
 		while (GetInstanceCount())
 		{
 			RemoveInstance(0);
@@ -36,12 +54,16 @@ void UTraitRendererComponent::TickComponent(
 	Filter += TraitType;
 	Filter.Exclude<FRendering>();
 	Mechanism->Enchain<FUnsafeChain>(Filter)->Operate(
-	[=](FUnsafeSubjectHandle Subject, const FLocated& Located, const FOriented* Oriented, const FScaled* Scaled)
+	[=](FUnsafeSubjectHandle Subject, const FLocated& Located, const FOriented* Oriented, const FRotated* Rotated, const FScaled* Scaled)
 	{
 		FQuat Rotation{FQuat::Identity};
 		if (Oriented)
 		{
 			Rotation = Oriented->Orientation.Rotation().Quaternion();
+		}
+		if (Rotated)
+		{
+			Rotation *= Rotated->Rotation;
 		}
 		FVector FinalScale(Scale);
 		if (Scaled)
@@ -65,7 +87,7 @@ void UTraitRendererComponent::TickComponent(
 			Transforms.AddDefaulted_GetRef() = SubjectTransform;
 		}
 
-		Subject.SetTrait(FRendering(Id));
+		Subject.SetTrait(FRendering(this, Id));
 	});
 
 	// Update the positions...
@@ -73,12 +95,16 @@ void UTraitRendererComponent::TickComponent(
 	Filter = FFilter::Make<FLocated, FRendering>();
 	Filter += TraitType;
 	Mechanism->EnchainSolid(Filter)->Operate(
-	[=](FSolidSubjectHandle Subject, FLocated Located, FRendering Rendering, FOriented* Oriented, FScaled* Scaled)
+	[=](FSolidSubjectHandle Subject, FLocated Located, FRendering Rendering, FOriented* Oriented, FRotated* Rotated, FScaled* Scaled)
 	{
 		FQuat Rotation{ FQuat::Identity };
 		if (Oriented)
 		{
 			Rotation = Oriented->Orientation.Rotation().Quaternion();
+		}
+		if (Rotated)
+		{
+			Rotation *= Rotated->Rotation;
 		}
 		FVector FinalScale(Scale);
 		if (Scaled)
@@ -95,8 +121,9 @@ void UTraitRendererComponent::TickComponent(
 
 	// Zero-down the unoccupied transforms...
 	FreeTransforms.Reset();
-	for (int32 i = ValidTransforms.IndexOf(false); i < Transforms.Num();
-		 i = ValidTransforms.IndexOf(false, i + 1))
+	for (int32 i = ValidTransforms.IndexOf(false); 
+			   i < Transforms.Num();
+			   i = ValidTransforms.IndexOf(false, i + 1))
 	{
 		FreeTransforms.Add(i);
 		Transforms[i].SetScale3D(FVector::ZeroVector);
