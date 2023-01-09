@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import shutil
 import os
+import subprocess
 import json
 import argparse
 import glob
@@ -65,7 +66,10 @@ try:
 except:
     pass
 
-COMPONENTS = ["Config", "Docs", "Source", "Resources"]
+DOCS_SRC_DIR = "Docs.Src"
+DOCS_BUILD_DIR = "Docs.Build"
+DOCS_DIR = "Docs"
+COMPONENTS = ["Config", DOCS_DIR, "Source", "Resources"]
 
 parser = argparse.ArgumentParser(description='Pack the plugin for distribution.')
 parser.add_argument('--engine', '-e', action='store_const', dest='type',
@@ -76,6 +80,14 @@ parser.add_argument('--unreal-engine', '-ue', dest='ue',
                     help='A version of Unreal Engine to package for.')
 
 args = parser.parse_args()
+
+def make_docs():
+    html_dir = os.path.join(DOCS_BUILD_DIR, "html")
+    latex_dir = os.path.join(DOCS_BUILD_DIR, "latex")
+    subprocess.run(["doxygen"], shell=True, cwd=DOCS_SRC_DIR)
+    shutil.make_archive(os.path.join(DOCS_DIR, "HTML"), 'zip', html_dir)
+    subprocess.run(["make.bat"], shell=True, cwd=latex_dir)
+    shutil.move(os.path.join(latex_dir, "refman.pdf"), os.path.join(DOCS_DIR, "ApparatusAPI.pdf"))
 
 def pack(engine_version):
     try:
@@ -153,5 +165,6 @@ def pack(engine_version):
     shutil.make_archive(f"{plugin_name}-{file_plugin_version}", 'zip', PACKAGE_SITE)
     shutil.rmtree(PACKAGE_SITE)
 
+make_docs()
 for ev in engine_versions:
     pack(ev)

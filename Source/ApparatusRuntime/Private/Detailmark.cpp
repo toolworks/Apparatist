@@ -35,12 +35,6 @@ FDetailmark::ToString() const
 	return MoveTemp(str);
 }
 
-int32
-FDetailmark::RegisteredDetailsNum()
-{
-	return UMachine::RegisteredDetailsNum();
-}
-
 void
 FDetailmark::PostSerialize(const FArchive& Archive)
 {

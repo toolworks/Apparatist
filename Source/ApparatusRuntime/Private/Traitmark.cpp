@@ -35,12 +35,6 @@ FTraitmark::ToString() const
 	return MoveTemp(Str);
 }
 
-FORCEINLINE int32
-FTraitmark::RegisteredTraitsNum()
-{
-	return UMachine::RegisteredTraitsNum();
-}
-
 void
 FTraitmark::PostSerialize(const FArchive& Archive)
 {

@@ -1706,6 +1706,12 @@ FTraitmark::FTraitmark(const TArray<UScriptStruct*, AllocatorT>& InTraits)
 	Add(InTraits);
 }
 
+FORCEINLINE int32
+FTraitmark::RegisteredTraitsNum()
+{
+	return UMachine::RegisteredTraitsNum();
+}
+
 #pragma endregion Traitmark Inlines
 
 #pragma region Detailmark Inlines
@@ -1763,6 +1769,12 @@ FDetailmark::FDetailmark(const TArray<UDetail*, AllocatorT>& InDetails)
   : DetailsMask(UMachine::RegisteredDetailsNum())
 {
 	Add(InDetails);
+}
+
+FORCEINLINE int32
+FDetailmark::RegisteredDetailsNum()
+{
+	return UMachine::RegisteredDetailsNum();
 }
 
 #pragma endregion Detailmark Inlines
