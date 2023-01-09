@@ -10,7 +10,7 @@ Perhaps you should start learning Apparatus with the help of our [Manual](https:
 
 ## Links
 
-* [Turbopedia Manual](https://turbanov.ru/wiki/en/toolworks/docs/apparatus")
+* [Turbopedia Manual](https://turbanov.ru/wiki/en/toolworks/docs/apparatus)
 * [Marketplace Page](https://www.unrealengine.com/marketplace/en-US/product/apparatus)
 * [TurboTalk Forums](https://talk.turbanov.ru/c/apparatus)
 * [GitHub Sample Project](https://github.com/toolworks/ApparatusPlatformer)

@@ -76,9 +76,13 @@ void FMechanismCustomization::CustomizeDetails(IDetailLayoutBuilder& DetailBuild
 					const auto Collection = NewObject<USubjectRecordCollection>(Package, *CollectionName, EObjectFlags::RF_Public | EObjectFlags::RF_Standalone);
 					Mechanism->CollectSubjects(Collection, Mechanism->DumpingFilter, FM_All);
 					FString PackageFileName = FPackageName::LongPackageNameToFilename(*PackageName, FPackageName::GetAssetPackageExtension());
+#if ENGINE_MAJOR_VERSION >= 5
 					FSavePackageArgs SaveArgs = {};
 					SaveArgs.TopLevelFlags = RF_Standalone;
 					UPackage::SavePackage(Package, Collection, *PackageFileName, SaveArgs);
+#else
+					UPackage::SavePackage(Package, Collection, RF_Standalone, *PackageFileName);
+#endif
 				}),
 				FOnAssetDialogCancelled::CreateLambda([](){}));
 		}
