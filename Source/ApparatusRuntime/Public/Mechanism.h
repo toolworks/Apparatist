@@ -3175,7 +3175,7 @@ ISubjective::EnableDetail(const TSubclassOf<UDetail> DetailClass)
 
 	if (GetFingerprint().Contains(DetailClass))
 	{
-		// The detail is already available and is active.
+		// The detail is already available and is in fact already active.
 		const auto r = GetDetail(DetailClass);
 		check(r);
 		return MakeOutcome<Paradigm, UDetail*>(EApparatusStatus::Noop, r);
@@ -3217,7 +3217,7 @@ ISubjective::EnableDetail(const TSubclassOf<UDetail> DetailClass)
 template < EParadigm Paradigm/*=EParadigm::Default*/ >
 inline TOutcome<Paradigm, UDetail*>
 ISubjective::AddDetail(const TSubclassOf<UDetail> DetailClass,
-					   const bool                 bReuseDisabled)
+					   const bool                 bReuseDisabled/*=true*/)
 {
 	check(IsValidSubjective(this));
 	check(DetailClass);
@@ -3226,7 +3226,7 @@ ISubjective::AddDetail(const TSubclassOf<UDetail> DetailClass,
 		   TEXT("Adding subjective details is not possible during uniform mode. "
 				"Do you have an unfinished uniform iterating?"));
 
-	if (UNLIKELY(bReuseDisabled))
+	if (LIKELY(bReuseDisabled))
 	{
 		// Try to find an inactive detail.
 

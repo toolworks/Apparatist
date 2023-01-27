@@ -21,6 +21,8 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 
+#include "More/Containers/Array.h"
+
 #ifndef SKIP_MACHINE_H
 #define SKIP_MACHINE_H
 #define BELT_H_SKIPPED_MACHINE_H
@@ -57,18 +59,20 @@ class APPARATUSRUNTIME_API UBelt
 
   public:
 
-	enum
-	{
-		/**
-		 * Invalid slot index.
-		 */
-		InvalidSlotIndex = FBeltSlot::InvalidIndex,
+	/**
+	 * The type of the detail line identifier.
+	 */
+	using DetailLineIndexType = FBeltSlot::DetailLineIndexType;
 
-		/**
-		 * Invalid detail line index.
-		 */
-		InvalidDetailLineIndex = FBeltSlot::InvalidDetailIndex
-	};
+	/**
+	 * Invalid slot index.
+	 */
+	static constexpr auto InvalidSlotIndex = FBeltSlot::InvalidIndex;
+
+	/**
+	 * Invalid detail line index.
+	 */
+	static constexpr auto InvalidDetailLineIndex = FBeltSlot::InvalidDetailLineIndex;
 
 	/**
 	 * The belt's tag type.
@@ -88,18 +92,37 @@ class APPARATUSRUNTIME_API UBelt
   private:
 
 	/**
-	 * The detailmark of the belt.
+	 * The current detailmark of the belt.
 	 * 
-	 * The belt is sparse and may still miss some of the details
-	 * during the iteration.
+	 * @note Belts are sparse and may still miss some of the detail
+	 * places during the iterating process.
 	 * 
-	 * @note The detailmark is decomposed and contains
-	 * separate detail entries for child and base classes
-	 * for the sake of correct iterating.
+	 * This detailmark is expanded with the new details when needed.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Belt,
 			  Meta = (AllowPrivateAccess = "true"))
 	FDetailmark Detailmark;
+
+	/**
+	 * The child lines cache entry type.
+	 */
+	using ChildLinesCacheEntryType = TArray<int32, TInlineAllocator<4>>;
+
+	/**
+	 * A static empty entry to return.
+	 */
+	static ChildLinesCacheEntryType EmptyChildLinesEntry;
+
+	/**
+	 * The child lines caching dictionary type.
+	 */
+	using ChildLinesCacheType = TMap<TSubclassOf<UDetail>, ChildLinesCacheEntryType,
+									 TSetAllocator<typename FDefaultSetAllocator::SparseArrayAllocator, TInlineAllocator<8>>>;
+
+	/**
+	 * The cached mappings to detail line child classes.
+	 */
+	mutable ChildLinesCacheType ChildLinesCache;
 
 	/**
 	 * Is this a sparse belt allowing some empty detail spaces?
@@ -143,29 +166,169 @@ class APPARATUSRUNTIME_API UBelt
 	/**
 	 * Get the line index for a detail class.
 	 * 
+	 * Respects the inheritance model.
+	 * 
 	 * @param DetailClass The detail class to query for.
-	 * @return The hinting detail index.
+	 * @return The index of the detail line.
 	 */
-	FORCEINLINE int32
+	FORCEINLINE DetailLineIndexType
 	DetailLineIndexOf(const TSubclassOf<UDetail> DetailClass) const
 	{
-		return GetDetailmark().IndexOf(DetailClass);
+		const auto& LinesCache = DetailLinesIndicesOf(DetailClass);
+		if (UNLIKELY(LinesCache.Num() == 0))
+		{
+			return InvalidDetailLineIndex;
+		}
+		return LinesCache[0];
 	}
 
 	/**
 	 * Get the line index for a detail class.
 	 * 
+	 * Respects the inheritance model.
+	 * 
 	 * @note The method actually supports non-detail classes,
 	 * i.e. @c INDEX_NONE will be safely returned in that case.
 	 * 
 	 * @tparam D The detail class to query for.
-	 * @return The hinting detail index.
+	 * @return The index of the detail line.
 	 */
-	template < class D >
-	FORCEINLINE constexpr int32
+	template < class D,
+			   TDetailClassSecurity<D> = true >
+	FORCEINLINE auto
 	DetailLineIndexOf() const
 	{
-		return GetDetailmark().template IndexOf<D>();
+		return DetailLineIndexOf(D::StaticClass());
+	}
+
+#ifndef DOXYGEN_ONLY
+
+	/**
+	 * Get the line index for a detail class.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * @note The method actually supports non-detail classes,
+	 * i.e. @c InvalidDetailLineIndex will be safely returned in that case.
+	 * 
+	 * @tparam D The detail class to query for.
+	 * @return The index of the detail line.
+	 */
+	template < class D,
+			   TNonDetailClassSecurity<D> = true >
+	FORCEINLINE constexpr DetailLineIndexType
+	DetailLineIndexOf() const
+	{
+		return InvalidDetailLineIndex;
+	}
+
+#endif // DOXYGEN_ONLY
+
+	/**
+	 * Get line indices of the details equal or derived from a detail class.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * @param DetailClass The class of the detail to get by.
+	 * @return The detail lines of the specified class.
+	 */
+	FORCEINLINE const ChildLinesCacheEntryType& 
+	DetailLinesIndicesOf(TSubclassOf<UDetail> DetailClass) const
+	{
+		const auto LinesPtr = ChildLinesCache.Find(DetailClass);
+		if (UNLIKELY(LinesPtr == nullptr))
+		{
+			return EmptyChildLinesEntry;
+		}
+		return *LinesPtr;
+	}
+
+	/**
+	 * Get line indices of the details equal or derived from a detail class.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * Safely returns an empty array for non-detail classes.
+	 * 
+	 * @tparam D The class of the detail to get by.
+	 * @return The detail lines of the specified class.
+	 */
+	template < typename D,
+			   TDetailClassSecurity<D> = true >
+	FORCEINLINE const ChildLinesCacheEntryType& 
+	DetailLinesIndicesOf() const
+	{
+		return DetailLinesIndicesOf(D::StaticClass());
+	}
+
+#ifndef DOXYGEN_ONLY
+
+	/**
+	 * Get line indices of the details equal or derived from a detail class.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * Safely returns an empty array for non-detail classes.
+	 * 
+	 * @tparam D The class of the detail to get by.
+	 * @return The detail lines of the specified class.
+	 */
+	template < typename D,
+			   TNonDetailClassSecurity<D> = true >
+	FORCEINLINE const ChildLinesCacheEntryType& 
+	DetailLinesIndicesOf() const
+	{
+		return EmptyChildLinesEntry;
+	}
+
+#endif // DOXYGEN_ONLY
+
+	/**
+	 * @brief Collect mainline indices for a list of details.
+	 * 
+	 * This respects the inheritance model.
+	 * 
+	 * @tparam DetailsAllocatorT The allocator of the details array.
+	 * @tparam IndicesAllocatorT The allocator of the indices array.
+	 * @param[in] InDetails The details to find mainline indices for.
+	 * @param[out] OutIndices The result receiver.
+	 */
+	template < typename DetailsAllocatorT = FDefaultAllocator,
+			   typename IndicesAllocatorT = FDefaultAllocator >
+	FORCEINLINE void
+	CollectMainlineIndices(const TArray<TSubclassOf<UDetail>, DetailsAllocatorT>& InDetails,
+						   TArray<DetailLineIndexType, IndicesAllocatorT>&        OutIndices)
+	{
+		for (int32 i = 0; i < InDetails.Num(); ++i)
+		{
+			for (int32 j = 0; j < Detailmark.DetailsNum(); ++j)
+			{
+				if (Detailmark[j]->IsChildOf(InDetails[i]))
+				{
+					OutIndices.AddUnique(j);
+				}
+			}
+		}
+	}
+
+	/**
+	 * @brief Get mainline indices for a list of details.
+	 * 
+	 * This respects the inheritance model.
+	 * 
+	 * @tparam DetailsAllocatorT The allocator of the details array.
+	 * @tparam IndicesAllocatorT The allocator of the indices array.
+	 * @param[in] InDetails The details to find mainline indices for.
+	 * @param[out] OutIndices The result receiver.
+	 */
+	template < typename DetailsAllocatorT = FDefaultAllocator,
+			   typename IndicesAllocatorT = FDefaultAllocator >
+	FORCEINLINE void
+	GetMainlineIndices(const TArray<TSubclassOf<UDetail>, DetailsAllocatorT>& InDetails,
+					   TArray<DetailLineIndexType, IndicesAllocatorT>&        OutIndices)
+	{
+		OutIndices.Reset();
+		CollectMainlineIndices(InDetails, OutIndices);
 	}
 
   private:
@@ -502,235 +665,6 @@ FBeltSlotCache::Fetch(const TSubclassOf<UDetail> DetailClass,
 }
 
 #pragma endregion Belt Slot Cache
-
-#pragma region Belt Slot
-
-FORCEINLINE bool
-FBeltSlot::IsLocked() const
-{
-	check(Index > UBelt::InvalidDetailLineIndex);
-	return Owner && (Index < Owner->IterableCount);
-}
-
-inline int32
-FBeltSlot::CalcIterableCombosCount(const FFilter&       InFilter,
-								   const TArray<int32>& InDetailsIndices) const
-{
-	check(Owner);
-	check(Owner->IsLocked())
-
-	// Check if the current subjective is valid at all...
-	if (UNLIKELY(IsStale()))
-	{
-		return 0;
-	}
-
-	// Check the subjective matches the filter...
-	if (!Subjective->Matches(InFilter))
-	{
-		return 0;
-	}
-
-	int32 IterableCombosCount = 1; // 1 by default, since we'll multiply.
-	for (int32 i = 0; i < InDetailsIndices.Num(); ++i)
-	{
-		const int32           DetailIndex = InDetailsIndices[i];
-		const FBeltSlotCache& Cache       = Details[DetailIndex];
-		const int32           c           = Cache.IterableNum();
-		if (c == 0)
-		{
-			return 0;
-		}
-		IterableCombosCount *= c;
-	}
-
-	return IterableCombosCount;
-} //-CalcIterableCombosCount
-
-FORCEINLINE int32
-FBeltSlot::BeginIteration(const FFilter&       InFilter,
-						  const TArray<int32>& InDetailsIndices) const
-{
-	check(Owner);
-	check((Index > InvalidIndex) && (Index < Owner->IterableCount));
-
-	// Lock the cached details needed:
-	for (int32 i = 0; i < InDetailsIndices.Num(); ++i)
-	{
-		// Isn't using MapIndex() here since it requires
-		// an already locked state we don't have yet:
-		const int32 DetailIndex = InDetailsIndices[i];
-		Details[DetailIndex].Lock();
-	}
-
-	return CalcIterableCombosCount(InFilter, InDetailsIndices);
-}
-
-FORCEINLINE int32
-FBeltSlot::PrepareForIteration(const FFilter&       InFilter,
-							   const TArray<int32>& InDetailsIndices) const
-{
-	return BeginIteration(InFilter, InDetailsIndices);
-}
-
-inline EApparatusStatus
-FBeltSlot::Unlock() const
-{
-	check(Owner);
-	check(Owner->IterableCount >= 0);
-	check((Index > InvalidIndex) && (Index < Owner->IterableCount));
-
-	// Unlock all of the cache...
-	for (int32 i = 0; i < Details.Num(); ++i)
-	{
-		Details[i].Unlock();
-	}
-
-	return EApparatusStatus::Success;
-}
-
-FORCEINLINE
-FBeltSlot::FBeltSlot(class UBelt* Belt) : Owner(Belt) 
-{ 
-	Index = Belt->Slots.Num(); 
-}
-
-FORCEINLINE const FDetailmark&
-FBeltSlot::GetDetailmark() const
-{
-	check(Owner);
-	return Owner->GetDetailmark();
-}
-
-template < EParadigm Paradigm/*=EParadigm::DefaultInternal*/ >
-inline TOutcome<Paradigm, UDetail*>
-FBeltSlot::DetailAtLine(const TArray<int32>& DetailsIndices,
-						const int32          ComboIndex,
-						const int32          DetailIndex) const
-{
-	check(Owner);
-	check(ComboIndex > InvalidComboIndex);
-	check(DetailIndex >= 0 && DetailIndex < Details.Num());
-	checkSlow(DetailsIndices.Contains(DetailIndex));
-
-	UDetail* RetDetail = nullptr;
-
-	if (LIKELY(Details[DetailIndex].IterableNum() == 1))
-	{
-		// A single detail is present, so return it.
-		RetDetail = Details[DetailIndex][0].Get();
-	}
-	else
-	{
-		// Multiple details are in the list.
-		// Get a detail according to a current combination...
-		int32 SubIndex = 0;
-		int32 AccumCount = 1; // Accumulated detail count.
-		int32 i = 0; // Detail counter.
-		int32 SubDetailIndex; // Sub-detail index.
-		do
-		{
-			SubDetailIndex = DetailsIndices[i++];
-			const int32 SubCount = Details[SubDetailIndex].IterableNum();
-			check(SubCount >= 1);
-
-			SubIndex = (ComboIndex / AccumCount) % SubCount;
-			AccumCount *= SubCount;
-		} while (SubDetailIndex != DetailIndex);
-
-		RetDetail = Details[DetailIndex][SubIndex].Get();
-	}
-
-	if (AvoidConditionFormat(Paradigm, RetDetail == nullptr, TEXT("The detail must be present (fetched).")))
-	{
-		return MakeOutcome<Paradigm, UDetail*>(EApparatusStatus::SanityCheckFailed, nullptr);
-	}
-
-	return RetDetail;
-} //-DetailAt
-
-template < EParadigm Paradigm/*=EParadigm::DefaultInternal*/ >
-inline TOutcome<Paradigm, UDetail*>
-FBeltSlot::GetDetailHinted(const TArray<int32>&       DetailsIndices,
-						   const int32                ComboIndex,
-						   const TSubclassOf<UDetail> DetailClass,
-						   const int32                DetailIndexHint) const
-{
-	check(Owner);
-	check(ComboIndex > InvalidComboIndex);
-
-	const FDetailmark& Detailmark = GetDetailmark();
-	if (LIKELY((DetailIndexHint > InvalidDetailIndex) && (DetailIndexHint < Detailmark.DetailsNum())))
-	{
-		const TSubclassOf<UDetail> RealDetailClass = Detailmark[DetailIndexHint];
-		if (LIKELY(RealDetailClass->IsChildOf(DetailClass)))
-		{
-			return DetailAtLine(DetailsIndices, ComboIndex, DetailIndexHint);
-		}
-	}
-
-	// The detail class doesn't match.
-	// Try to find the detail index within the active
-	// detailmark...
-	const int32 RealIndex = Detailmark.IndexOf(DetailClass);
-	if (LIKELY(RealIndex != UBelt::InvalidDetailLineIndex)) 
-	{
-		return DetailAtLine(DetailsIndices, ComboIndex, RealIndex);
-	}
-	// Detail still was not found.
-	// This may happen when the subjective is removed from the belt...
-	if (LIKELY(Subjective))
-	{
-		return Subjective->GetDetail(DetailClass);
-	}
-	return nullptr;
-}
-
-inline bool
-FBeltSlot::IsSkipped(const FFilter& InFilter) const
-{
-	if (UNLIKELY(IsStale())) return true;
-	if (UNLIKELY(!Owner)) return true;
-	check(Owner->IsLocked());
-	
-	if (UNLIKELY(!Subjective->Matches(InFilter)))
-	{
-		return true;
-	}
-
-	return false;
-}
-
-FORCEINLINE bool
-FBeltSlot::IsViable() const
-{
-	if (IsStale()) return false;
-	return (Index > InvalidIndex) && (Index < Owner->Count);
-}
-
-FORCEINLINE bool
-FBeltSlot::IsViable(const FFilter& InFilter) const
-{
-	if (UNLIKELY(IsStale())) return false;
-	if (UNLIKELY(!Owner)) return false;
-	
-	return Subjective->Matches(InFilter);
-}
-
-FORCEINLINE void
-FBeltSlot::Expand()
-{
-	check(Owner);
-	// We need a full detailmark here, not the possibly locked one:
-	const FDetailmark& TargetDetailmark = Owner->GetDetailmark();
-	Details.Reserve(TargetDetailmark.DetailsNum());
-	while (Details.Num() < TargetDetailmark.DetailsNum())
-	{
-		Details.Add(FBeltSlotCache(this));
-	}
-}
-
-#pragma endregion Belt Slot
 
 #pragma region Subjective
 

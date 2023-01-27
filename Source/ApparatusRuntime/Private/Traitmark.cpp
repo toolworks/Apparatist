@@ -45,19 +45,19 @@ FTraitmark::PostSerialize(const FArchive& Archive)
 		for (int32 i = 0; i < Traits.Num(); ++i)
 		{
 			auto* const Trait = Traits[i];
-			if (UNLIKELY(!Trait))
+			if (UNLIKELY(Trait == nullptr))
 			{
-				// Null traits are fine during the editing.
 #if !WITH_EDITOR
+				// Null traits are removed at run-time:
 				Traits.RemoveAtSwap(i--);
 #endif
 				continue;
 			}
 			const FBitMask& Mask = GetTraitMask(Trait);
-			if (UNLIKELY(TraitsMask.Includes(Mask)))
+			if (UNLIKELY(TraitsMask.Includes(Mask) && Traits.Contains(Trait)))
 			{
-				// Duplicate traits are fine during the editing...
 #if !WITH_EDITOR
+				// Duplicate traits are removed at run-time:
 				Traits.RemoveAtSwap(i--);
 #endif
 				continue;

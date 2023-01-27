@@ -1663,7 +1663,7 @@ struct APPARATUSRUNTIME_API FFilter : public FFilterIndicator
 			return MakeOutcome<Paradigm, FFilter&>(EApparatusStatus::Noop, *this);
 		}
 
-		const FBitMask& Mask = FTraitmark::GetTraitMask(InExcludedTraitType);
+		const FBitMask& Mask = FTraitmark::GetExcludingTraitMask(InExcludedTraitType);
 		if (UNLIKELY(Fingerprint.GetTraitsMask().Includes(Mask)))
 		{
 			return MakeOutcome<Paradigm, FFilter&>(EApparatusStatus::Conflict, *this);
@@ -1695,7 +1695,7 @@ struct APPARATUSRUNTIME_API FFilter : public FFilterIndicator
 			return MakeOutcome<Paradigm, FFilter&>(EApparatusStatus::Noop, *this);
 		}
 
-		const FBitMask& Mask = FDetailmark::GetExcludedDetailMask(InExcludedDetailClass);
+		const FBitMask& Mask = FDetailmark::GetExcludingDetailMask(InExcludedDetailClass);
 		if (UNLIKELY(Fingerprint.GetDetailsMask().Includes(Mask)))
 		{
 			return MakeOutcome<Paradigm, FFilter&>(EApparatusStatus::Conflict, *this);
@@ -2010,7 +2010,7 @@ struct APPARATUSRUNTIME_API FFilter : public FFilterIndicator
 			if (UNLIKELY(!InExcludedDetailClass))
 				continue;
 
-			const FBitMask& Mask = FDetailmark::GetExcludedDetailMask(InExcludedDetailClass);
+			const FBitMask& Mask = FDetailmark::GetExcludingDetailMask(InExcludedDetailClass);
 			if (UNLIKELY(Fingerprint.GetDetailsMask().Includes(Mask)))
 			{
 				ExcludedDetailsMask.Reset();
@@ -2323,7 +2323,7 @@ struct APPARATUSRUNTIME_API FFilter : public FFilterIndicator
 	Excludes(const TSubclassOf<UDetail> DetailClass) const
 	{
 		check(DetailClass);
-		const FBitMask& Mask = FDetailmark::GetExcludedDetailMask(DetailClass);
+		const FBitMask& Mask = FDetailmark::GetExcludingDetailMask(DetailClass);
 		return ExcludedDetailsMask.Includes(Mask);
 	}
 
@@ -2403,7 +2403,7 @@ struct APPARATUSRUNTIME_API FFilter : public FFilterIndicator
 			if (UNLIKELY(!ExcludedDetailClass))
 				continue;
 
-			const FBitMask& Mask = FDetailmark::GetExcludedDetailMask(ExcludedDetailClass);
+			const FBitMask& Mask = FDetailmark::GetExcludingDetailMask(ExcludedDetailClass);
 			if (UNLIKELY(Fingerprint.GetDetailsMask().Includes(Mask)))
 			{
 				return true;

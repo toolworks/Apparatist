@@ -24,6 +24,7 @@
 #include "UObject/Class.h"
 #include "Misc/App.h"
 #include "Templates/Casts.h"
+#include "Containers/Array.h"
 
 #ifndef SKIP_MACHINE_H
 #define SKIP_MACHINE_H
@@ -32,6 +33,7 @@
 
 #include "ApparatusStatus.h"
 #include "BitMask.h"
+#include "TraitInfo.h"
 #include "TraitsExtractor.h"
 
 #ifdef TRAITMARK_H_SKIPPED_MACHINE_H
@@ -54,9 +56,10 @@ class ISubjective;
 class ISolidSubjective;
 class UScriptStruct;
 struct FCommonChain;
+struct FChunkSlot;
 
 /**
- * Checks if a type can be considered to be actually a trait.
+ * Checks if a type can be considered a trait.
  */
 template< typename T >
 class TTraitCandidateChecker
@@ -108,11 +111,21 @@ template < typename T >
 using TTraitTypeSecurity = more::enable_if_t<IsTraitType<T>(), bool>;
 
 /**
+ * Secure the non-trait type.
+ * 
+ * @tparam T The type to secure as a non-trait.
+ */
+template < typename T >
+using TNonTraitTypeSecurity = more::enable_if_t<!IsTraitType<T>(), bool>;
+
+/**
  * Check if there are any directly references
  * within the list.
  * 
  * This template is used to detect the need
  * for solid operating.
+ * 
+ * Also checks for arrays of trait pointers.
  * 
  * @tparam List The list of types to examine.
  */
@@ -123,16 +136,29 @@ struct THasDirectTraitAccess;
 template < typename T, typename... Tail >
 struct THasDirectTraitAccess<T, Tail...>
 {
-	enum { Value = (IsTraitType<typename more::flatten<T>::type>() 
-					&& (std::is_reference<T>::value || std::is_pointer<T>::value))
-				|| THasDirectTraitAccess<Tail...>::Value };
+	// Plain type version:
+	template < typename S >
+	struct TChecker
+	{
+		static constexpr bool Value = 
+			(IsTraitType<more::flatten_t<S>>() 
+		 	 && (std::is_reference<S>::value || std::is_pointer<S>::value));
+	};
+
+	// Array version:
+	template < typename S, typename AllocatorT >
+	struct TChecker<TArray<S, AllocatorT>>
+	  : public TChecker<S>
+	{};
+
+	static constexpr bool Value = TChecker<T>::Value || THasDirectTraitAccess<Tail...>::Value;
 };
 
 // Empty list version:
 template < >
 struct THasDirectTraitAccess<>
 {
-	enum { Value = false };
+	static constexpr bool Value = false;
 };
 
 /**
@@ -145,13 +171,10 @@ struct APPARATUSRUNTIME_API FTraitmark
 
   public:
 
-	enum
-	{
-		/**
-		 * Invalid trait identifier.
-		 */
-		InvalidTraitId = -1,
-	};
+	/**
+	 * Invalid trait identifier.
+	 */
+	static constexpr auto InvalidTraitId = FTraitInfo::InvalidId;
 
 	/**
 	 * The type of the traits array container.
@@ -176,9 +199,15 @@ struct APPARATUSRUNTIME_API FTraitmark
 	 */
 	mutable FBitMask TraitsMask;
 
+	/**
+	 * Should the traits be decomposed with theirbase types when added.
+	 */
+	bool bDecomposed = false;
+
 	friend struct FFingerprint;
 	friend struct FFilter;
 	friend class UChunk;
+	friend struct FChunkSlot;
 	friend struct FSubjectHandle;
 
 	friend class UBelt;
@@ -202,23 +231,39 @@ struct APPARATUSRUNTIME_API FTraitmark
 	/**
 	 * Get a trait's unique identifier.
 	 */
-	static int32
-	GetTraitId(const UScriptStruct* TraitType);
+	static FTraitInfo::IdType
+	GetTraitId(const UScriptStruct* const TraitType);
 
 	/**
 	 * Get the cached mask for a trait type.
 	 */
 	static const FBitMask&
-	GetTraitMask(const UScriptStruct* TraitType);
+	GetTraitMask(const UScriptStruct* const TraitType);
 
 	/**
 	 * Get the mask of a trait.
 	 */
-	template <class T>
+	template < typename T >
 	FORCEINLINE static const FBitMask&
 	GetTraitMask()
 	{
 		return GetTraitMask(T::StaticStruct());
+	}
+
+	/**
+	 * Get the cached excluding mask for a trait type.
+	 */
+	static const FBitMask&
+	GetExcludingTraitMask(const UScriptStruct* const TraitType);
+
+	/**
+	 * Get the cached excluding mask for a trait type.
+	 */
+	template < typename T >
+	FORCEINLINE static const FBitMask&
+	GetExcludingTraitMask()
+	{
+		return GetExcludingTraitMask(T::StaticStruct());
 	}
 
 	/**
@@ -338,7 +383,11 @@ struct APPARATUSRUNTIME_API FTraitmark
 	/**
 	 * Get the index of a specific trait type.
 	 * 
+	 * The method supports finding traits by a base type.
+	 * Though, the type will be matched exactly first.
+	 * 
 	 * @param TraitType The type of the trait to get an index of.
+	 * May be a @c nullptr and @c INDEX_NONE will be returned in such case.
 	 * @return The index of the trait.
 	 * @return @c INDEX_NONE If there is no such trait within or
 	 * @p TraitType is @c nullptr.
@@ -356,14 +405,65 @@ struct APPARATUSRUNTIME_API FTraitmark
 			return INDEX_NONE;
 		}
 
+		// Find an exact match first....
 		for (int32 i = 0; i < Traits.Num(); ++i)
 		{
 			if (Traits[i] == TraitType) return i;
 		}
 
+		// Find descendant...
+		for (int32 i = 0; i < Traits.Num(); ++i)
+		{
+			if (UNLIKELY(Traits[i] == nullptr)) continue;
+			if (Traits[i]->IsChildOf(TraitType)) return i;
+		}
+
 		checkf(false, TEXT("Trait was not found in the list: %s"),
 			   *TraitType->GetName());
 		return INDEX_NONE;
+	}
+
+	/**
+	 * Get the indices of a specific trait type.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * @param TraitType The type of the trait to get an index of.
+	 * May be a @c nullptr and @c INDEX_NONE will be returned in such case.
+	 * @param OutIndices The resulting indices receiver.
+	 * @return The index of the trait.
+	 * @return @c INDEX_NONE If there is no such trait within or
+	 * @p TraitType is @c nullptr.
+	 */
+	template < typename AllocatorT = FDefaultAllocator >
+	EApparatusStatus
+	IndicesOf(const UScriptStruct*       TraitType,
+			  TArray<int32, AllocatorT>& OutIndices) const
+	{
+		OutIndices.Reset();
+		if (UNLIKELY(TraitType == nullptr))
+		{
+			return EApparatusStatus::NoItems;
+		}
+		const FBitMask& Mask = GetTraitMask(TraitType);
+		if (UNLIKELY(!GetTraitsMask().Includes(Mask)))
+		{
+			return EApparatusStatus::NoItems;
+		}
+
+		// Find all descendants...
+		for (int32 i = 0; i < Traits.Num(); ++i)
+		{
+			if (UNLIKELY(Traits[i] == nullptr)) continue;
+			if (Traits[i]->IsChildOf(TraitType))
+			{
+				OutIndices.Add(i);
+			}
+		}
+
+		checkf(OutIndices.Num() > 0, TEXT("Trait was not found in the list: %s"),
+			   *(TraitType->GetName()));
+		return EApparatusStatus::Success;
 	}
 
 	/**
@@ -388,7 +488,7 @@ struct APPARATUSRUNTIME_API FTraitmark
 	 * @param[in] InTraitmark A traitmark to get a mapping from as an array of trait types.
 	 * @param[out] OutMapping The resulting mapping.
 	 */
-	template<typename AllocatorTA, typename AllocatorTB>
+	template < typename AllocatorTA, typename AllocatorTB >
 	FORCEINLINE EApparatusStatus
 	FindMappingFrom(const TArray<UScriptStruct*, AllocatorTA>& InTraitmark,
 					TArray<int32, AllocatorTB>&                OutMapping) const
@@ -703,6 +803,40 @@ struct APPARATUSRUNTIME_API FTraitmark
 	/// @{
 
 	/**
+	 * Add a trait type.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @param TraitType The type of the trait to add.
+	 * May be a @c nullptr.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm = EParadigm::Default >
+	TOutcome<Paradigm>
+	Add(UScriptStruct* const TraitType)
+	{
+		if (bDecomposed)
+		{
+			return DoAddDecomposed<Paradigm>(TraitType);
+		}
+		if (UNLIKELY(TraitType == nullptr))
+		{
+			return EApparatusStatus::Noop;
+		}
+
+		const FBitMask& Mask = GetTraitMask(TraitType);
+		// We have to accommodate for base types which already may be included
+		// in the mask, but still should be added to the array explicitly...
+		if (LIKELY((TraitsMask.template Include<MakePolite(Paradigm)>(Mask) == EApparatusStatus::Success)
+				|| (Traits.Find(TraitType) == INDEX_NONE)))
+		{
+			Traits.Add(TraitType);
+			return EApparatusStatus::Success;
+		}
+
+		return EApparatusStatus::Noop;
+	}
+
+	/**
 	 * Add trait types to a fingerprint
 	 * through an initialization list.
 	 * 
@@ -714,19 +848,14 @@ struct APPARATUSRUNTIME_API FTraitmark
 	Add(std::initializer_list<UScriptStruct*> InTraits)
 	{
 		auto Status = EApparatusStatus::Noop;
-		for (auto InTrait : InTraits)
+		for (const auto InTrait : InTraits)
 		{
 			if (UNLIKELY(InTrait == nullptr))
 			{
 				continue;
 			}
 
-			const FBitMask& TraitMask = GetTraitMask(InTrait);
-			if (LIKELY(TraitsMask.template Include<MakePolite(Paradigm)>(TraitMask) == EApparatusStatus::Success))
-			{
-				Traits.Add(InTrait);
-				Status = EApparatusStatus::Success;
-			}
+			StatusAccumulate(Status, ToStatus(Add<Paradigm>(InTrait)));
 		}
 		return Status;
 	}
@@ -746,46 +875,16 @@ struct APPARATUSRUNTIME_API FTraitmark
 	TOutcome<Paradigm>
 	Add(const FTraitmark& InTraitmark)
 	{
-		if (UNLIKELY(std::addressof(InTraitmark) == this))
+		if (bDecomposed)
 		{
-			return EApparatusStatus::Noop;
+			return DoAddDecomposed<Paradigm>(InTraitmark);
 		}
-		if (UNLIKELY(GetTraitsMask().Includes(InTraitmark.GetTraitsMask())))
+		if (UNLIKELY(std::addressof(InTraitmark) == this))
 		{
 			return EApparatusStatus::Noop;
 		}
 
 		return Add<Paradigm>(InTraitmark.Traits);
-	}
-
-	/**
-	 * Add a trait type.
-	 *
-	 * @tparam Paradigm The paradigm to work under.
-	 * @param TraitType The type of the trait to add.
-	 * May be a @c nullptr.
-	 * @return The outcome of the operation.
-	 */
-	template < EParadigm Paradigm = EParadigm::Default >
-	TOutcome<Paradigm>
-	Add(UScriptStruct* const TraitType)
-	{
-		if (UNLIKELY(TraitType == nullptr))
-		{
-			return EApparatusStatus::Noop;
-		}
-
-		const FBitMask& Mask = GetTraitMask(TraitType);
-		// Check if already is included:
-		if (UNLIKELY(TraitsMask.Includes(Mask)))
-		{
-			return EApparatusStatus::Noop;
-		}
-
-		Traits.Add(TraitType);
-		TraitsMask.Include(Mask);
-		
-		return EApparatusStatus::Success;
 	}
 
 	/**
@@ -805,19 +904,13 @@ struct APPARATUSRUNTIME_API FTraitmark
 		auto Status = EApparatusStatus::Noop;
 		for (int32 i = 0; i < InTraits.Num(); ++i)
 		{
-			const auto TraitType = InTraits.TypeAt(i);
-			if (UNLIKELY(!TraitType))
+			const auto InTrait = InTraits.TypeAt(i);
+			if (UNLIKELY(InTrait == nullptr))
 			{
 				continue;
 			}
 
-			const FBitMask& TraitMask = GetTraitMask(TraitType);
-			// Check if already is included:
-			if (LIKELY(TraitsMask.template Include<MakePolite(Paradigm)>(TraitMask) == EApparatusStatus::Success))
-			{
-				Traits.Add(TraitType);
-				Status = EApparatusStatus::Success;
-			}
+			StatusAccumulate(Status, ToStatus(Add<Paradigm>(InTrait)));
 		}
 		return Status;
 	}
@@ -841,6 +934,68 @@ struct APPARATUSRUNTIME_API FTraitmark
   private:
 
 	/**
+	 * Add a trait type while decomposing it
+	 * with its base types.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @param TraitType The type of the trait to add while decomposing.
+	 * May be a @c nullptr since adding nothing is a valid EApparatusStatus::Noop.
+	 * @return The status of the operation.
+	 * @return EApparatusStatus::Noop if nothing was actually changed.
+	 */
+	template < EParadigm Paradigm = EParadigm::Default >
+	TOutcome<Paradigm>
+	DoAddDecomposed(UScriptStruct* const TraitType)
+	{
+		if (UNLIKELY(TraitType == nullptr))
+		{
+			return EApparatusStatus::Noop;
+		}
+		const FBitMask& Mask = GetTraitMask(TraitType);
+		// Check if already is included:
+		if (UNLIKELY(IsNoop(TraitsMask.template Include<MakePolite(Paradigm)>(Mask))))
+		{
+			return EApparatusStatus::Noop;
+		}
+		for (auto BaseType = Cast<UScriptStruct>(TraitType->GetSuperStruct());
+				  BaseType != nullptr;
+				  BaseType = Cast<UScriptStruct>(TraitType->GetSuperStruct()))
+		{
+			// There is some base type available.
+			// Add it as well since we should be decomposing:
+			Traits.AddUnique(BaseType);
+		}
+		Traits.Add(TraitType);
+		return EApparatusStatus::Success;
+	}
+
+	/**
+	 * Add a traitmark while decomposing its details to their base classes.
+	 * 
+	 * @tparam Paradigm The paradigm to work under.
+	 * @param InTraitmark The traitmark to add.
+	 * @return The status of the operation.
+	 * @return EApparatusStatus::Noop if nothing was actually changed.
+	 */
+	template < EParadigm Paradigm = EParadigm::Default >
+	TOutcome<Paradigm>
+	DoAddDecomposed(const FTraitmark& InTraitmark)
+	{
+		if (UNLIKELY(GetTraitsMask().Includes(InTraitmark.GetTraitsMask())))
+		{
+			return EApparatusStatus::Noop;
+		}
+		for (const auto InTrait : InTraitmark.Traits)
+		{
+#if !WITH_EDITOR
+			check(InTrait != nullptr);
+#endif
+			AssessOK(Paradigm, DoAddDecomposed<Paradigm>(InTrait));
+		}
+		return EApparatusStatus::Success;
+	}
+
+	/**
 	 * Add a trait type. Trait-compatible version.
 	 * 
 	 * This is an internal helper method.
@@ -852,7 +1007,7 @@ struct APPARATUSRUNTIME_API FTraitmark
 	 * @see Add()
 	 */
 	template < EParadigm Paradigm, typename T,
-			   typename std::enable_if<IsTraitType<typename more::flatten<T>::type>(), int>::type = 0 >
+			   TTraitTypeSecurity<more::flatten_t<T>> = true >
 	FORCEINLINE auto
 	DoAdd()
 	{
@@ -958,7 +1113,7 @@ struct APPARATUSRUNTIME_API FTraitmark
 	 * @tparam Paradigm The paradigm to work under.
 	 * @param TraitType The trait type to remove.
 	 * May be a @c nullptr and will be ignored in that case.
-	 * @returns The status of the operation.
+	 * @returns The outcome of the operation.
 	 */
 	template < EParadigm Paradigm = EParadigm::Default >
 	TOutcome<Paradigm>
@@ -978,8 +1133,22 @@ struct APPARATUSRUNTIME_API FTraitmark
 
 		// We can use swapping here,
 		// since fingerprints are never reduced within chunks/belts.
-		Traits.RemoveSwap(TraitType);
-		TraitsMask.SetMasked(TraitMask, false);
+		if (UNLIKELY(Traits.RemoveSwap(TraitType) == 0))
+		{
+			return EApparatusStatus::Noop;
+		}
+
+		// We can't just set the mask here, as
+		// there can be other traits with the same
+		// base type trait mask, so we rebuild
+		// the mask completely now...
+		TraitsMask.Reset();
+		for (int32 i = 0; i < Traits.Num(); ++i)
+		{
+			if (UNLIKELY(Traits[i] == nullptr)) continue;
+			const FBitMask& Mask = GetTraitMask(Traits[i]);
+			TraitsMask |= Mask;
+		}
 
 		return EApparatusStatus::Success;
 	}
@@ -1131,6 +1300,8 @@ struct APPARATUSRUNTIME_API FTraitmark
 #pragma endregion Serialization
 
 #pragma region Initialization
+	/// @name Initialization
+	/// @{
 
 	/**
 	 * Initialize a new traitmark with a list of traits.
@@ -1206,6 +1377,7 @@ struct APPARATUSRUNTIME_API FTraitmark
 		return Make<Ts..., Paradigm>();
 	}
 
+	/// @}
 #pragma endregion Initialization
 
 }; //-FTraitmark

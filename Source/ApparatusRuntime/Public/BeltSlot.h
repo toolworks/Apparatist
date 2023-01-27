@@ -53,26 +53,22 @@ class ISubjective;
  */
 struct APPARATUSRUNTIME_API FBeltSlot
 {
-
   public:
 
-	enum
-	{
-		/**
-		 * Invalid belt slot index.
-		 */
-		InvalidIndex = ISubjective::InvalidSlotIndex,
+	/**
+	 * The type of the detail line type.
+	 */
+	using DetailLineIndexType = int32;
 
-		/**
-		 * Invalid combination index.
-		 */
-		InvalidComboIndex = -1,
+	/**
+	 * Invalid belt slot index.
+	 */
+	static constexpr auto InvalidIndex = ISubjective::InvalidSlotIndex;
 
-		/**
-		 * Invalid detail index.
-		 */
-		InvalidDetailIndex = -1
-	};
+	/**
+	 * Invalid detail line index.
+	 */
+	static constexpr DetailLineIndexType InvalidDetailLineIndex = -1;
 
   private:
 
@@ -115,51 +111,30 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	bool bStale = true;
 
 	/**
-	 * Calculate the total number of combinations possible
-	 * within this slot according for the specified filter
-	 * and details list.
+	 * Prepare the slot for an iteration locking it for a filter.
 	 * 
-	 * @note Not all of those combos can be valid during the actual iteration,
-	 * so they still need to be tested with FBeltSlot::IsComboValid().
-	 * 
-	 * @note Also matches the subjective's fingerprint against the filter.
-	 * 
-	 * @param InFilter The filter to calculate for.
-	 * @param InDetailsIndices The indices of the details to consider.
-	 * @return The number of iterable combinations within the slot.
-	 */
-	int32
-	CalcIterableCombosCount(const FFilter&       InFilter,
-							const TArray<int32>& InDetailsIndices) const;
-
-	/**
-	 * Lock the slot for an iteration with
-	 * the specified details indices.
-	 * 
-	 * @note A full locked belt state is required
-	 * for this method.
-	 * 
-	 * @return The number of iterations possible
-	 * on this slot.
-	 */
-	int32
-	BeginIteration(const FFilter&       InFilter,
-				   const TArray<int32>& InDetailsIndices) const;
-
-	/**
-	 * Prepare the slot for an iteration locking it
-	 * and fetching the combinations count for a
-	 * specific 
-	 * 
+	 * @tparam AllocatorT The array allocator.
 	 * @param InFilter The filter to prepare the slot for.
-	 * @param InDetailsIndices The indices of the details to prepare
-	 * for the iteration.
-	 * @return The number of iterations
-	 * possible on this slot.
+	 * @return Is the iteration viable.
 	 */
-	int32
-	PrepareForIteration(const FFilter&       InFilter,
-						const TArray<int32>& InDetailsIndices) const;
+	bool
+	PrepareForIteration(const FFilter& InFilter) const;
+
+	/**
+	 * Prepare the slot for an iteration locking it for specific mainline details.
+	 * 
+	 * This is an optimized version.
+	 * 
+	 * @tparam AllocatorT The array allocator.
+	 * @param InFilter The filter to prepare the slot for.
+	 * @param InMainlineIndices The indices of the details to prepare
+	 * for the iteration.
+	 * @return Is the iteration viable.
+	 */
+	template < typename AllocatorT = FDefaultAllocator >
+	bool
+	PrepareForIteration(const FFilter&                                            InFilter,
+						const TArray<FBeltSlot::DetailLineIndexType, AllocatorT>& InMainlineIndices) const;
 
 	/**
 	 * Unlock the slot from iterating.
@@ -319,37 +294,28 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	/**
 	 * Check if a detail exists at the specified index.
 	 * 
-	 * @param DetailIndex The index of the detail to check for availability.
+	 * @param DetailLineIndex The index of the detail to check for availability.
 	 * @return The state of examination.
 	 */
 	FORCEINLINE bool
-	IsDetailAvailableAtLine(const int32 DetailIndex)
+	IsDetailAvailableAtLine(const int32 DetailLineIndex)
 	{
-		if (UNLIKELY(DetailIndex < 0))
+		if (UNLIKELY(DetailLineIndex < 0))
 			return false;
-		if (UNLIKELY(DetailIndex >= Details.Num()))
+		if (UNLIKELY(DetailLineIndex >= Details.Num()))
 			return false;
-		return Details[DetailIndex].HasAny();
+		return Details[DetailLineIndex].HasAny();
 	}
 
-	/**
-	 * Check if a combo is valid, i.e. has all
-	 * the necessary details.
-	 * 
-	 * @param DetailsIndices The indices of the needed details to check for.
-	 * @param ComboIndex The index of the combination to examine.
-	 * @return The state of examination.
-	 * @return false if this combo should be skipped.
-	 */
-	bool
-	IsComboValid(const TArray<int32>& DetailsIndices,
-				 const int32          ComboIndex) const;
+#pragma region Details Getting
+	/// @name Details Getting
+	/// @{
 
 	/**
 	 * Get the detail at a specified index
 	 * according to the combination supplied.
 	 * 
-	 * @param DetailsIndices The indices of the details to consider.
+	 * @param InDetailsIndices The indices of the details to consider.
 	 * @param ComboIndex The index of the combination to examine.
 	 * @param DetailLineIndex The index of the detail to get.
 	 * Must also exist within the details indices array.
@@ -357,28 +323,71 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	 */
 	template < EParadigm Paradigm = EParadigm::DefaultInternal >
 	TOutcome<Paradigm, UDetail*>
-	DetailAtLine(const TArray<int32>& DetailsIndices,
-				 const int32          ComboIndex,
-				 const int32          DetailLineIndex) const;
+	DetailAtLine(const int32 DetailLineIndex) const;
+
+	/**
+	 * Get the detail at a specified index
+	 * according to the combination supplied.
+	 * 
+	 * @param InDetailsIndices The indices of the details to consider.
+	 * @param ComboIndex The index of the combination to examine.
+	 * @param DetailLineIndex The index of the detail to get.
+	 * Must also exist within the details indices array.
+	 * @return The detail at specified offset within the indices.
+	 */
+	template < EParadigm Paradigm = EParadigm::DefaultInternal,
+			   typename AllocatorT = FDefaultAllocator >
+	TOutcome<Paradigm>
+	DetailsAtLine(const int32 DetailLineIndex, TArray<UDetail*, AllocatorT>& OutDetails) const;
+
+	/**
+	 * Get the detail at a specified index
+	 * according to the combination supplied.
+	 * 
+	 * @param DetailLinesIndices The indices of the details to consider.
+	 * @param ComboIndex The index of the combination to examine.
+	 * @param DetailLineIndex The index of the detail to get.
+	 * Must also exist within the details indices array.
+	 * @return The detail at specified offset within the indices.
+	 */
+	template < EParadigm Paradigm        = EParadigm::DefaultInternal,
+			   class     D               = UDetail,
+			   typename  LinesAllocatorT = FDefaultAllocator,
+			   typename  AllocatorT      = FDefaultAllocator,
+			   TDetailClassSecurity<D> = true >
+	TOutcome<Paradigm>
+	DetailsAtLines(const TArray<int32, LinesAllocatorT>& DetailLinesIndices,
+				   TArray<D*, AllocatorT>&               OutDetails) const;
+
+	/**
+	 * Get all of the details at specific lines.
+	 * 
+	 * @param DetailLinesIndices The index of the detail to get.
+	 * Must also exist within the details indices array.
+	 * @param OutDetails The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm        = EParadigm::DefaultInternal,
+			   typename  LinesAllocatorT = FDefaultAllocator,
+			   typename  AllocatorT      = FDefaultAllocator >
+	TOutcome<Paradigm>
+	DetailsAtLines(const TArray<int32, LinesAllocatorT>& DetailLinesIndices,
+				   TArray<UDetail*, AllocatorT>&         OutDetails) const;
 
 	/**
 	 * Get the detail at a specified index hinted
 	 * according to the combination supplied.
-	 * 
-	 * @param DetailsIndices The indices of the details to consider.
-	 * @param ComboIndex The index of the combination.
+	 *
 	 * @param DetailClass The class of the detail to get.
 	 * @param DetailIndexHint The hinting index of the detail to get.
 	 * Relative to the belt's detailmark.
 	 * Should also exist within the details indices array.
-	 * May be a FBeltSlot::InvalidDetailIndex to suppress the hinting.
+	 * May be a FBeltSlot::InvalidDetailLineIndex to suppress the hinting.
 	 * @return The detail of the specified type.
 	 */
 	template < EParadigm Paradigm = EParadigm::DefaultInternal >
 	TOutcome<Paradigm, UDetail*>
-	GetDetailHinted(const TArray<int32>&       DetailsIndices,
-					const int32                ComboIndex,
-					const TSubclassOf<UDetail> DetailClass,
+	GetDetailHinted(const TSubclassOf<UDetail> DetailClass,
 					const int32                DetailIndexHint) const;
 
 	/**
@@ -388,23 +397,18 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	 * 
 	 * @tparam Paradigm The paradigm to work under.
 	 * @tparam D The class of the detail to get.
-	 * @param DetailsIndices The indices of the details to consider.
-	 * @param ComboIndex The index of the combination to examine.
 	 * @param DetailIndexHint The hinting index of the detail
 	 * relative to the belt's detailmark.
 	 * Should also exist within the details indices array.
-	 * May be a FBeltSlot::InvalidDetailIndex to suppress the hinting.
+	 * May be a FBeltSlot::InvalidDetailLineIndex to suppress the hinting.
 	 * @return The detail of the specified type.
 	 */
 	template < EParadigm Paradigm, typename D >
 	FORCEINLINE TOutcome<Paradigm, D*>
-	GetDetailHinted(const TArray<int32>& DetailsIndices,
-					const int32          ComboIndex,
-					const int32          DetailIndexHint) const
+	GetDetailHinted(const int32 DetailIndexHint) const
 	{
 		return OutcomeStaticCast<D*>(
-					GetDetailHinted<Paradigm>(DetailsIndices, ComboIndex,
-											  D::StaticClass(), DetailIndexHint));
+					GetDetailHinted<Paradigm>(D::StaticClass(), DetailIndexHint));
 	}
 
 	/**
@@ -414,21 +418,17 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	 * 
 	 * @tparam D The class of the detail to get.
 	 * @tparam Paradigm The paradigm to work under.
-	 * @param DetailsIndices The indices of the details to consider.
-	 * @param ComboIndex The index of the combination to examine.
 	 * @param DetailIndexHint The hinting index of the detail
 	 * relative to the belt's detailmark.
 	 * Should also exist within the details indices array.
-	 * May be a FBeltSlot::InvalidDetailIndex to suppress the hinting.
+	 * May be a FBeltSlot::InvalidDetailLineIndex to suppress the hinting.
 	 * @return The detail of the specified type.
 	 */
 	template < typename D, EParadigm Paradigm = EParadigm::DefaultInternal >
 	FORCEINLINE auto
-	GetDetailHinted(const TArray<int32>& DetailsIndices,
-					const int32          ComboIndex,
-					const int32          DetailIndexHint) const
+	GetDetailHinted(const int32 DetailIndexHint) const
 	{
-		return GetDetailHinted<Paradigm, D>(DetailsIndices, ComboIndex, DetailIndexHint);
+		return GetDetailHinted<Paradigm, D>(DetailIndexHint);
 	}
 
 	/**
@@ -437,9 +437,7 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	 */
 	template < EParadigm Paradigm = EParadigm::DefaultInternal >
 	FORCEINLINE TOutcome<Paradigm, UDetail*>
-	GetDetail(const TArray<int32>&       DetailsIndices,
-			  const int32                ComboIndex,
-			  const TSubclassOf<UDetail> DetailClass) const;
+	GetDetail(const TSubclassOf<UDetail> DetailClass) const;
 
 	/**
 	 * Get the detail of a specific class
@@ -448,10 +446,9 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	 */
 	template < EParadigm Paradigm, class D >
 	FORCEINLINE TOutcome<Paradigm, D*>
-	GetDetail(const TArray<int32>& DetailsIndices,
-			  const int32          ComboIndex) const
+	GetDetail() const
 	{
-		return OutcomeStaticCast<D*>(GetDetail<Paradigm>(DetailsIndices, ComboIndex, D::StaticClass()));
+		return OutcomeStaticCast<D*>(GetDetail<Paradigm>(D::StaticClass()));
 	}
 
 	/**
@@ -461,11 +458,53 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	 */
 	template < class D,  EParadigm Paradigm =  EParadigm::DefaultInternal >
 	FORCEINLINE auto
-	GetDetail(const TArray<int32>& DetailsIndices,
-			  const int32          ComboIndex) const
+	GetDetail() const
 	{
-		return GetDetail<Paradigm, D>(DetailsIndices, ComboIndex);
+		return GetDetail<Paradigm, D>();
 	}
+
+	/**
+	 * Get the detail of a specific class
+	 * according to the combination supplied.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  AllocatorT = FDefaultAllocator >
+	FORCEINLINE TOutcome<Paradigm>
+	GetDetails(const TSubclassOf<UDetail>    DetailClass,
+			   TArray<UDetail*, AllocatorT>& OutDetails) const;
+
+	/**
+	 * Get the detail of a specific class
+	 * according to the combination supplied.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   class     D          = UDetail,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TDetailClassSecurity<D> = true >
+	FORCEINLINE TOutcome<Paradigm>
+	GetDetails(TArray<D*, AllocatorT>& OutDetails) const;
+
+	/**
+	 * Get the detail at a specified index hinted
+	 * according to the combination supplied.
+	 *
+	 * @param DetailClass The class of the detail to get.
+	 * @param DetailIndexHint The hinting index of the detail to get.
+	 * Relative to the belt's detailmark.
+	 * Should also exist within the details indices array.
+	 * May be a FBeltSlot::InvalidDetailLineIndex to suppress the hinting.
+	 * @param OutDetails The results receiver.
+	 * @return The detail of the specified type.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  AllocatorT = FDefaultAllocator >
+	TOutcome<Paradigm>
+	GetDetailsHinted(const TSubclassOf<UDetail>    DetailClass,
+					 const int32                   DetailIndexHint,
+					 TArray<UDetail*, AllocatorT>& OutDetails) const;
+
+	/// @}
+#pragma endregion Details Getting
 
 	/**
 	 * Fetch the details from the current subjective.
@@ -485,9 +524,7 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	/**
 	 * The active detailmark of the slot,
 	 * 
-	 * It is the same as its owning belt's unless
-	 * the belt is locked in which case it's of
-	 * the locking filter.
+	 * It is the same as its owning belt's.
 	 */
 	const FDetailmark&
 	GetDetailmark() const;
@@ -562,7 +599,7 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	FORCEINLINE FBeltSlot&
 	operator=(const FBeltSlot& InSlot)
 	{
-		verify(OK(Set(InSlot)));
+		VerifyOK(Set(InSlot));
 		return *this;
 	}
 
@@ -601,99 +638,3 @@ struct APPARATUSRUNTIME_API FBeltSlot
 	}
 
 }; //-struct FBeltSlot
-
-#pragma region Belt Slot Inlines
-
-FORCEINLINE FBeltSlot::~FBeltSlot()
-{
-	checkf(!HasLockedDetails(),
-		   TEXT("The #%d slot must be unlocked before destruction."),
-		   Index);
-}
-
-template < EParadigm Paradigm/*=EParadigm::DefaultInternal*/ >
-inline TOutcome<Paradigm, UDetail*>
-FBeltSlot::GetDetail(const TArray<int32>&       DetailsIndices,
-					 const int32                ComboIndex,
-					 const TSubclassOf<UDetail> DetailClass) const
-{
-	check(ComboIndex >= 0);
-	check(DetailClass);
-	const auto& Detailmark = GetDetailmark();
-	const auto DetailClassIndex = Detailmark.IndexOf(DetailClass);
-	if (AvoidConditionFormat(Paradigm, DetailClassIndex == InvalidDetailIndex,
-							 TEXT("An invalid index for a '%s' detail class to get: %d"),
-							 *DetailClass->GetName(), (int)DetailClassIndex))
-	{
-		return MakeOutcome<Paradigm, UDetail*>(EApparatusStatus::Missing, nullptr);
-	}
-	return DetailAtLine(DetailsIndices, ComboIndex, DetailClassIndex);
-}
-
-FORCEINLINE void
-FBeltSlot::ResetDetails() const
-{
-	for (int32 i = 0; i < Details.Num(); i++)
-	{
-		Details[i].Reset();
-	}
-}
-
-FORCEINLINE FSubjectHandle
-FBeltSlot::GetSubject() const
-{
-	if (LIKELY(Subjective))
-	{
-		return Subjective->GetHandle();
-	}
-	checkf(!HasAnyDetails(), TEXT("A belt slot without a subjective must not have any details set."));
-	return FSubjectHandle::Invalid;
-}
-
-inline void
-FBeltSlot::SetSubjective(ISubjective* const InSubjective)
-{
-	if (UNLIKELY(Subjective == InSubjective))
-	{
-		// The subjective is the same as it was.
-		// Maybe it was brought back actually?
-		if (UNLIKELY(Subjective && bStale))
-		{
-			FetchDetails();
-			bStale = false;
-		}
-		return;
-	}
-
-	if (Subjective && !InSubjective)
-	{
-		// Need to reset the subjective...
-		if (!bStale)
-		{
-			// We are to reset the current subjective to a null.
-			// Mark it as taking no slots explicitly...
-			Subjective->TakeBeltSlot(nullptr, InvalidIndex);
-		}
-	}
-	else
-	{
-		// Subjective is to be changed to a valid one...
-		checkf(!HasLockedDetails(),
-			   TEXT("The slot must be unlocked in order for "
-					"subjective to be set or changed to a new valid one."));
-		checkf(Subjective || bStale,
-			   TEXT("Can set anew only a stale or an already occupied slot."));
-	}
-
-	Subjective = InSubjective;
-	ResetDetails();
-	bStale = !Subjective;
-	if (!bStale)
-	{
-		// The new subjective is valid,
-		// so fetch its details now:
-		FetchDetails();
-	}
-}
-
-#pragma endregion Belt Slot Inlines

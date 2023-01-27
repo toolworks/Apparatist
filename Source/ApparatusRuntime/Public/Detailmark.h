@@ -22,6 +22,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Class.h"
 #include "Serialization/Archive.h"
+#include "More/Containers/Array.h"
 
 #ifndef SKIP_MACHINE_H
 #define SKIP_MACHINE_H
@@ -56,7 +57,7 @@ struct APPARATUSRUNTIME_API FDetailmark
 	/**
 	 * Invalid detail identifier.
 	 */
-	static constexpr int32 InvalidDetailId = -1;
+	static constexpr auto InvalidDetailId = FDetailInfo::InvalidId;
 
 	/**
 	 * The type of the details array container.
@@ -81,6 +82,12 @@ struct APPARATUSRUNTIME_API FDetailmark
 	 */
 	mutable FBitMask DetailsMask;
 
+	/**
+	 * Decompose details with their base classes when they are
+	 * added to the detailmark.
+	 */
+	bool bDecomposed = false;
+
 	friend struct FFilter;
 	friend class UChunk;
 	friend struct FSubjectHandle;
@@ -100,7 +107,7 @@ struct APPARATUSRUNTIME_API FDetailmark
 	/**
 	 * Get a detail's unique identifier.
 	 */
-	static int32
+	static FDetailInfo::IdType
 	GetDetailId(const TSubclassOf<UDetail> DetailClass);
 
 	/**
@@ -119,7 +126,7 @@ struct APPARATUSRUNTIME_API FDetailmark
 	 * Get the excluded mask of a detail type.
 	 */
 	static const FBitMask&
-	GetExcludedDetailMask(const TSubclassOf<UDetail> DetailClass);
+	GetExcludingDetailMask(const TSubclassOf<UDetail> DetailClass);
 
 	/**
 	 * Get the mask of a detail's class.
@@ -135,9 +142,9 @@ struct APPARATUSRUNTIME_API FDetailmark
 	 * Cached internally.
 	 */
 	static FORCEINLINE const FBitMask&
-	GetExcludedDetailMask(const UDetail* const Detail)
+	GetExcludingDetailMask(const UDetail* const Detail)
 	{
-		return GetExcludedDetailMask(Detail->GetClass());
+		return GetExcludingDetailMask(Detail->GetClass());
 	}
 
 	/**
@@ -370,7 +377,7 @@ struct APPARATUSRUNTIME_API FDetailmark
 		// Try to find the exact class first...
 		for (int32 i = 0; i < Details.Num(); ++i)
 		{
-			if (UNLIKELY(!Details[i]))
+			if (UNLIKELY(Details[i] == nullptr))
 				continue;
 			if (*Details[i] == *DetailClass)
 				return i;
@@ -379,7 +386,7 @@ struct APPARATUSRUNTIME_API FDetailmark
 		// Try to find some child class now...
 		for (int32 i = 0; i < Details.Num(); ++i)
 		{
-			if (UNLIKELY(!Details[i]))
+			if (UNLIKELY(Details[i] == nullptr))
 				continue;
 			if (Details[i]->IsChildOf(DetailClass))
 				return i;
@@ -415,6 +422,7 @@ struct APPARATUSRUNTIME_API FDetailmark
 	/**
 	 * Find all of the indices of a detail class.
 	 * 
+	 * @tparam AllocatorT The type of the output array allocator.
 	 * @param DetailClass A detail class to find the indices of.
 	 * @param OutIndices The resulting indices storage.
 	 * @return The status of the operation.
@@ -426,15 +434,10 @@ struct APPARATUSRUNTIME_API FDetailmark
 	{
 		OutIndices.Reset();
 
-		if (UNLIKELY(DetailClass == UDetail::StaticClass()))
-		{
-			return EApparatusStatus::InvalidArgument;
-		}
-
 		const FBitMask& Mask = GetDetailMask(DetailClass);
 		if (UNLIKELY(!GetDetailsMask().Includes(Mask)))
 		{
-			return EApparatusStatus::Noop;
+			return EApparatusStatus::NoItems;
 		}
 
 		for (int32 i = 0; i < Details.Num(); ++i)
@@ -452,6 +455,22 @@ struct APPARATUSRUNTIME_API FDetailmark
 
 		check(OutIndices.Num() > 0);
 		return EApparatusStatus::Success;
+	}
+
+	/**
+	 * Find all of the indices of a detail class.
+	 * 
+	 * @tparam AllocatorT The type of the output array allocator.
+	 * @param DetailClass A detail class to find the indices of.
+	 * @param OutIndices The resulting indices storage.
+	 * @return The status of the operation.
+	 */
+	template < class D, typename AllocatorT,
+			   TDetailClassSecurity<D> = true >
+	FORCEINLINE EApparatusStatus
+	IndicesOf(TArray<int32, AllocatorT>& OutIndices) const
+	{
+		return IndicesOf(D::StaticClass(), OutIndices);
 	}
 
 	/**
@@ -853,17 +872,23 @@ struct APPARATUSRUNTIME_API FDetailmark
 	TOutcome<Paradigm>
 	Add(const TSubclassOf<UDetail> DetailClass)
 	{
-		auto Status = EApparatusStatus::Noop;
-		if (LIKELY(DetailClass))
+		if (UNLIKELY(DetailClass == nullptr)) return EApparatusStatus::Noop;
+		if (bDecomposed)
 		{
-			const FBitMask& DetailMask = GetDetailMask(DetailClass);
-			// Check if already is included:
-			if (LIKELY(DetailsMask.template Include<MakePolite(Paradigm)>(DetailMask) == EApparatusStatus::Success))
-			{
-				Details.Add(DetailClass);
-				Status = EApparatusStatus::Success;
-			}
+			return DoAddDecomposed<Paradigm>(DetailClass);
 		}
+		auto Status = EApparatusStatus::Noop;
+		
+		const FBitMask& DetailMask = GetDetailMask(DetailClass);
+		// We have to accommodate for base classes which already may be included
+		// in the mask, but still should be added to the array explicitly...
+		if (LIKELY((DetailsMask.template Include<MakePolite(Paradigm)>(DetailMask) == EApparatusStatus::Success)
+				|| (LIKELY(Details.Find(DetailClass) == INDEX_NONE))))
+		{
+			Details.Add(DetailClass);
+			Status = EApparatusStatus::Success;
+		}
+
 		return Status;
 	}
 
@@ -871,27 +896,22 @@ struct APPARATUSRUNTIME_API FDetailmark
 	 * Add detail classes to the detailmark.
 	 * 
 	 * @tparam Paradigm The paradigm to work under.
-	 * @param DetailClasses The detail classes to add.
+	 * @param InDetailClasses The detail classes to add.
 	 * @return The outcome of the operation.
-	 * Returns EApparatusStatus::Noop if nothing was actually changed.
+	 * @return EApparatusStatus::Noop if nothing was actually changed.
 	 */
 	template < EParadigm Paradigm = EParadigm::Default >
 	TOutcome<Paradigm>
-	Add(std::initializer_list<TSubclassOf<UDetail>> DetailClasses)
+	Add(std::initializer_list<TSubclassOf<UDetail>> InDetailClasses)
 	{
-		EApparatusStatus Status = EApparatusStatus::Noop;
-		for (auto DetailClass : DetailClasses)
+		auto Status = EApparatusStatus::Noop;
+		for (auto InDetailClass : InDetailClasses)
 		{
-			if (UNLIKELY(!DetailClass))
+			if (UNLIKELY(InDetailClass == nullptr))
 			{
 				continue;
 			}
-			const FBitMask& DetailMask = GetDetailMask(DetailClass);
-			if (LIKELY(DetailsMask.template Include<MakePolite(Paradigm)>(DetailMask) == EApparatusStatus::Success))
-			{
-				Details.Add(DetailClass);
-				Status = EApparatusStatus::Success;
-			}
+			StatusAccumulate(Status, ToStatus(Add<Paradigm>(InDetailClass)));
 		}
 		return Status;
 	}
@@ -908,76 +928,16 @@ struct APPARATUSRUNTIME_API FDetailmark
 	TOutcome<Paradigm>
 	Add(const FDetailmark& InDetailmark)
 	{
-		if (UNLIKELY(std::addressof(InDetailmark) == this))
+		if (bDecomposed)
 		{
-			return EApparatusStatus::Noop;
+			return DoAddDecomposed<Paradigm>(InDetailmark);
 		}
-		if (UNLIKELY(GetDetailsMask().Includes(InDetailmark.GetDetailsMask())))
+		if (UNLIKELY(std::addressof(InDetailmark) == this))
 		{
 			return EApparatusStatus::Noop;
 		}
 
 		return Add<Paradigm>(InDetailmark.Details);
-	}
-
-	/**
-	 * Add a detail class while decomposing it
-	 * with its base classes.
-	 *
-	 * @tparam Paradigm The paradigm to work under.
-	 * @param DetailClass A class of the detail to add.
-	 * @return The status of the operation.
-	 * Returns EApparatusStatus::Noop if nothing was actually changed.
-	 */
-	template < EParadigm Paradigm = EParadigm::Default >
-	TOutcome<Paradigm>
-	AddDecomposed(const TSubclassOf<UDetail> DetailClass)
-	{
-		if (UNLIKELY(!DetailClass || (DetailClass == UDetail::StaticClass())))
-		{
-			return EApparatusStatus::Noop;
-		}
-		const FBitMask& Mask = GetDetailMask(DetailClass);
-		// Check if already is included:
-		if (UNLIKELY(DetailsMask.Includes(Mask)))
-		{
-			return EApparatusStatus::Noop;
-		}
-		for (TSubclassOf<UDetail> BaseClass = DetailClass->GetSuperClass();
-					 BaseClass && BaseClass != UDetail::StaticClass();
-								  BaseClass = BaseClass->GetSuperClass())
-		{
-			// There is some base class available.
-			// Add it as well since we should be decomposing:
-			Details.AddUnique(BaseClass);
-		}
-		Details.Add(DetailClass);
-		DetailsMask.Include(Mask);
-		return EApparatusStatus::Success;
-	}
-
-	/**
-	 * Add a detailmark while decomposing its details to their base classes.
-	 * 
-	 * @tparam Paradigm The paradigm to work under.
-	 * @param InDetailmark The detailmark to add.
-	 * @return The status of the operation.
-	 * Returns EApparatusStatus::Noop if nothing was actually changed.
-	 */
-	template < EParadigm Paradigm = EParadigm::Default >
-	TOutcome<Paradigm>
-	AddDecomposed(const FDetailmark& InDetailmark)
-	{
-		if (UNLIKELY(GetDetailsMask().Includes(InDetailmark.GetDetailsMask())))
-		{
-			return EApparatusStatus::Noop;
-		}
-		for (auto InDetail : InDetailmark.Details)
-		{
-			check(InDetail != nullptr);
-			verify(OK(AddDecomposed<Paradigm>(InDetail)));
-		}
-		return EApparatusStatus::Success;
 	}
 
 	/**
@@ -995,15 +955,10 @@ struct APPARATUSRUNTIME_API FDetailmark
 		EApparatusStatus Status = EApparatusStatus::Noop;
 		for (auto InDetailClass : InDetailsClasses)
 		{
-			if (UNLIKELY(!InDetailClass))
+			if (UNLIKELY(InDetailClass == nullptr))
 			{
 				continue;
 			}
-			if (UNLIKELY(InDetailClass == UDetail::StaticClass()))
-			{
-				continue;
-			}
-
 			const FBitMask& Mask = GetDetailMask(InDetailClass);
 			// Check if already is included:
 			if (LIKELY(DetailsMask.template Include<MakePolite(Paradigm)>(Mask) == EApparatusStatus::Success))
@@ -1056,10 +1011,6 @@ struct APPARATUSRUNTIME_API FDetailmark
 			}
 			
 			const auto InDetailClass = InDetail->GetClass();
-			if (UNLIKELY(InDetailClass == UDetail::StaticClass()))
-			{
-				continue;
-			}
 			const FBitMask& DetailMask = GetDetailMask(InDetailClass);
 			// Check if already is included:
 			if (LIKELY(DetailsMask.template Include<MakePolite(Paradigm)>(DetailMask) == EApparatusStatus::Success))
@@ -1116,6 +1067,68 @@ struct APPARATUSRUNTIME_API FDetailmark
 	DoAdd()
 	{
 		return TOutcome<Paradigm>::Noop();
+	}
+
+	/**
+	 * Add a detail class while decomposing it
+	 * with its base classes.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @param DetailClass A class of the detail to add.
+	 * May be a @c nullptr, since adding nothing is a valid EApparatusStatus::Noop
+	 * @return The status of the operation.
+	 * @return EApparatusStatus::Noop if nothing was actually changed.
+	 */
+	template < EParadigm Paradigm = EParadigm::Default >
+	TOutcome<Paradigm>
+	DoAddDecomposed(const TSubclassOf<UDetail> DetailClass)
+	{
+		if (UNLIKELY(DetailClass == nullptr))
+		{
+			return EApparatusStatus::Noop;
+		}
+		const FBitMask& Mask = GetDetailMask(DetailClass);
+		// Check if already is included:
+		if (UNLIKELY(IsNoop(DetailsMask.template Include<MakePolite(Paradigm)>(Mask))))
+		{
+			return EApparatusStatus::Noop;
+		}
+		for (TSubclassOf<UDetail> BaseClass = DetailClass->GetSuperClass();
+					 			  BaseClass != nullptr;
+								  BaseClass = BaseClass->GetSuperClass())
+		{
+			// There is some base class available.
+			// Add it as well since we should be decomposing:
+			Details.AddUnique(BaseClass);
+		}
+		Details.Add(DetailClass);
+		return EApparatusStatus::Success;
+	}
+
+	/**
+	 * Add a detailmark while decomposing its details to their base classes.
+	 * 
+	 * @tparam Paradigm The paradigm to work under.
+	 * @param InDetailmark The detailmark to add.
+	 * @return The status of the operation.
+	 * Returns EApparatusStatus::Noop if nothing was actually changed.
+	 */
+	template < EParadigm Paradigm = EParadigm::Default >
+	TOutcome<Paradigm>
+	DoAddDecomposed(const FDetailmark& InDetailmark)
+	{
+		if (UNLIKELY(GetDetailsMask().Includes(InDetailmark.GetDetailsMask())))
+		{
+			return EApparatusStatus::Noop;
+		}
+		for (const auto InDetail : InDetailmark.Details)
+		{
+#if !WITH_EDITOR
+			check(InDetail != nullptr);
+#endif
+			AssessOK(Paradigm, DoAddDecomposed<Paradigm>(InDetail));
+		}
+		return EApparatusStatus::Success;
 	}
 
   public:
@@ -1217,16 +1230,19 @@ struct APPARATUSRUNTIME_API FDetailmark
 			return EApparatusStatus::Noop;
 		}
 
-		Details.RemoveSwap(DetailClass);
+		if (UNLIKELY(Details.RemoveSwap(DetailClass) == 0))
+		{
+			return EApparatusStatus::Noop;
+		}
 
-		// We can't just set the mask here (like in traitmark), as
+		// We can't just set the mask here, as
 		// there can be other details with the same
 		// base class detail mask, so we rebuild
 		// the mask completely now...
 		DetailsMask.Reset();
 		for (int32 i = 0; i < Details.Num(); ++i)
 		{
-			if (UNLIKELY(!Details[i])) continue;
+			if (UNLIKELY(Details[i] == nullptr)) continue;
 			const FBitMask& Mask = GetDetailMask(Details[i]);
 			DetailsMask |= Mask;
 		}

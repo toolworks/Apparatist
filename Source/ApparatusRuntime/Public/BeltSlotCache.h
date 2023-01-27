@@ -60,7 +60,7 @@ struct APPARATUSRUNTIME_API FBeltSlotCache
 	 * The fetched/cached details of the slot type
 	 * stored as weak references.
 	 */
-	TArray<TWeakObjectPtr<UDetail>> Details;
+	TArray<UDetail*> Details;
 
 	/**
 	 * The current number of iterable details.
@@ -80,18 +80,18 @@ struct APPARATUSRUNTIME_API FBeltSlotCache
 	FORCEINLINE bool
 	IsLocked() const
 	{
-		check(Owner);
+		check(Owner != nullptr);
 		return IterableCount >= 0;
 	}
 
 	/**
 	 * Lock the slot cache.
 	 */
-	FORCEINLINE void
+	FORCEINLINE auto
 	Lock()
 	{
-		if (UNLIKELY(IsLocked())) return;
-		IterableCount = Details.Num();
+		if (UNLIKELY(IsLocked())) return IterableCount;
+		return IterableCount = Details.Num();
 	}
 
 	/**
@@ -107,8 +107,11 @@ struct APPARATUSRUNTIME_API FBeltSlotCache
 		// Clean-up the leftover details now...
 		for (int32 i = 0; i < Details.Num(); ++i)
 		{
-			if (Details[i].IsValid() && Details[i]->IsEnabled()) continue;
-			Details.RemoveAtSwap(i--, 1, /*bAllowShrinking=*/false);
+			check(Details[i] != nullptr);
+			if (!Details[i]->IsEnabled())
+			{
+				Details.RemoveAtSwap(i--, 1, /*bAllowShrinking=*/false);
+			}
 		}
 	}
 
@@ -186,10 +189,9 @@ struct APPARATUSRUNTIME_API FBeltSlotCache
 	FORCEINLINE TSubclassOf<UDetail>
 	GetDetailClass() const
 	{
-		if (Details.Num() == 0) return nullptr;
 		for (int32 i = 0; i < Details.Num(); ++i)
 		{
-			if (Details[i].IsValid())
+			if (Details[i] != nullptr)
 			{
 				return Details[i]->GetClass();
 			}
@@ -200,7 +202,7 @@ struct APPARATUSRUNTIME_API FBeltSlotCache
 	/**
 	 * Get the list of all fetched details.
 	 */
-	FORCEINLINE const TArray<TWeakObjectPtr<class UDetail>>&
+	FORCEINLINE const TArray<class UDetail*>&
 	GetDetails() const
 	{
 		return Details;
@@ -221,14 +223,40 @@ struct APPARATUSRUNTIME_API FBeltSlotCache
 
 	/**
 	 * Check if there are any viable detail(s) within the cache.
+	 * 
+	 * @return The state of examination.
 	 */
 	FORCEINLINE bool
 	HasAny() const
 	{
-		const int32 Count = IterableNum();
+		const auto Count = IterableNum();
 		for (int32 i = 0; i < Count; ++i)
 		{
-			if (LIKELY(Details[i].IsValid() && Details[i]->IsEnabled()))
+			const auto Detail = Details[i];
+			check(Detail != nullptr);
+			if (LIKELY(Detail->IsEnabled()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Check if the cache has a valid subclass.
+	 * 
+	 * @param BaseDetailClass The base class to find a child of.
+	 * @return The state of examination.
+	 */
+	FORCEINLINE bool
+	HasChildOf(TSubclassOf<UDetail> BaseDetailClass) const
+	{
+		const auto Count = IterableNum();
+		for (int32 i = 0; i < Count; ++i)
+		{
+			const auto Detail = Details[i];
+			check(Detail != nullptr);
+			if (LIKELY(Detail->IsEnabled() && Detail->IsA(BaseDetailClass)))
 			{
 				return true;
 			}
@@ -249,7 +277,7 @@ struct APPARATUSRUNTIME_API FBeltSlotCache
 	 * 
 	 * @param Index The index of the detail to get.
 	 */
-	FORCEINLINE const TWeakObjectPtr<class UDetail>&
+	FORCEINLINE class UDetail*
 	operator[] (const int32 Index) const
 	{
 		return Details[Index];
@@ -269,7 +297,7 @@ struct APPARATUSRUNTIME_API FBeltSlotCache
 	Fetch(const TSubclassOf<UDetail> DetailClass,
 		  const TArray<UDetail*>&    InDetails)
 	{
-		check(DetailClass);
+		check(DetailClass != nullptr);
 
 		if (IsLocked())
 		{

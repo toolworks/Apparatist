@@ -141,6 +141,162 @@ FSubjectInfo::GetTraitPtr(UScriptStruct* const TraitType) const
 	return nullptr;
 }
 
+template < EParadigm Paradigm/*=EParadigm::DefaultInternal*/,
+		   typename  AllocatorT/*=FDefaultAllocator*/>
+TOutcome<Paradigm>
+FSubjectInfo::GetTraitsPtrs(UScriptStruct* const             TraitType,
+						    TArray<const void*, AllocatorT>& OutTraits) const
+{
+	OutTraits.Reset();
+
+	if (UNLIKELY(TraitType == nullptr))
+	{
+		return EApparatusStatus::NoItems;
+	}
+
+	if (AvoidConditionFormat(
+			Paradigm, Id == InvalidId,
+			TEXT("Invalid subject identifier to get constant traits from: #%d"), (int)Id))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+	if (AvoidConditionFormat(
+			Paradigm, SlotIndex == FSubjectInfo::InvalidSlotIndex,
+			TEXT("The subject to get constant traits of is invalid - bad slot index: %d"), (int)SlotIndex))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+	if (AvoidConditionFormat(
+			Paradigm, Chunk == nullptr,
+			TEXT("The subject to get constant traits of is invalid: no chunk is set.")))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+
+	if (LIKELY(Chunk->GetTraitmark().Contains(TraitType)))
+	{
+		// The trait is there in the chunk. Get its data and return...
+		return Chunk->template TraitsPtrsAt<Paradigm>(SlotIndex, TraitType, OutTraits);
+	}
+
+	return EApparatusStatus::NoItems;
+}
+
+template < EParadigm Paradigm/*=EParadigm::DefaultInternal*/,
+		   typename  AllocatorT/*=FDefaultAllocator*/>
+TOutcome<Paradigm>
+FSubjectInfo::GetTraitsPtrs(UScriptStruct* const       TraitType,
+						   TArray<void*, AllocatorT>& OutTraits)
+{
+	OutTraits.Reset();
+
+	if (UNLIKELY(TraitType == nullptr))
+	{
+		return EApparatusStatus::NoItems;
+	}
+
+	if (AvoidConditionFormat(
+			Paradigm, Id == InvalidId,
+			TEXT("Invalid subject identifier to get traits from: #%d"), (int)Id))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+	if (AvoidConditionFormat(
+			Paradigm, SlotIndex == FSubjectInfo::InvalidSlotIndex,
+			TEXT("The subject to get traits of is invalid - bad slot index: %d"), (int)SlotIndex))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+	if (AvoidConditionFormat(
+			Paradigm, Chunk == nullptr,
+			TEXT("The subject to get traits of is invalid: no chunk is set.")))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+
+	if (LIKELY(Chunk->GetTraitmark().Contains(TraitType)))
+	{
+		// The trait is there in the chunk. Get its data and return...
+		return Chunk->template TraitsPtrsAt<Paradigm>(SlotIndex, TraitType, OutTraits);
+	}
+
+	return EApparatusStatus::NoItems;
+}
+
+template < EParadigm Paradigm/*=EParadigm::DefaultInternal*/,
+		   typename T/*=void*/,
+		   typename AllocatorT/*=FDefaultAllocator*/,
+		   TTraitTypeSecurity<T>/*=true*/ >
+TOutcome<Paradigm>
+FSubjectInfo::GetTraitsPtrs(TArray<const T*, AllocatorT>& OutTraits) const
+{
+	OutTraits.Reset();
+
+	if (AvoidConditionFormat(
+			Paradigm, Id == InvalidId,
+			TEXT("Invalid subject identifier to get traits from: #%d"), (int)Id))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+	if (AvoidConditionFormat(
+			Paradigm, SlotIndex == FSubjectInfo::InvalidSlotIndex,
+			TEXT("The subject to get traits of is invalid - bad slot index: %d"), (int)SlotIndex))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+	if (AvoidConditionFormat(
+			Paradigm, Chunk == nullptr,
+			TEXT("The subject to get traits of is invalid: no chunk is set.")))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+
+	if (LIKELY(Chunk->GetTraitmark().template Contains<T>()))
+	{
+		// The trait is there in the chunk. Get its data and return...
+		return Chunk->template TraitsPtrsAt<Paradigm>(SlotIndex, OutTraits);
+	}
+
+	return EApparatusStatus::NoItems;
+}
+
+template < EParadigm Paradigm/*=EParadigm::DefaultInternal*/,
+		   typename T/*=void*/,
+		   typename AllocatorT/*=FDefaultAllocator*/,
+		   TTraitTypeSecurity<T>/*=true*/ >
+TOutcome<Paradigm>
+FSubjectInfo::GetTraitsPtrs(TArray<T*, AllocatorT>& OutTraits)
+{
+	OutTraits.Reset();
+
+	if (AvoidConditionFormat(
+			Paradigm, Id == InvalidId,
+			TEXT("Invalid subject identifier to get traits from: #%d"), (int)Id))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+	if (AvoidConditionFormat(
+			Paradigm, SlotIndex == FSubjectInfo::InvalidSlotIndex,
+			TEXT("The subject to get traits of is invalid - bad slot index: %d"), (int)SlotIndex))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+	if (AvoidConditionFormat(
+			Paradigm, Chunk == nullptr,
+			TEXT("The subject to get traits of is invalid: no chunk is set.")))
+	{
+		return MakeOutcome<Paradigm, EApparatusStatus::InvalidState>();
+	}
+
+	if (LIKELY(Chunk->GetTraitmark().template Contains<T>()))
+	{
+		// The trait is there in the chunk. Get its data and return...
+		return Chunk->template TraitsPtrsAt<Paradigm>(SlotIndex, OutTraits);
+	}
+
+	return EApparatusStatus::NoItems;
+}
+
 template < EParadigm Paradigm /*=EParadigm::DefaultInternal*/ >
 FORCEINLINE TOutcome<Paradigm>
 FSubjectInfo::GetTrait(UScriptStruct* const TraitType,
@@ -454,7 +610,7 @@ FSubjectInfo::SetTrait(UScriptStruct* const TraitType,
 	auto Status = Fingerprint.template Add<MakePolite(Paradigm)>(TraitType);
 	AssessCondition(Paradigm, OK(Status), Status);
 
-	if (IsNoop(Status))
+	if (UNLIKELY(IsNoop(Status)))
 	{
 		// The trait is already there in the chunk. Set its data and return...
 		return OldChunk->SetTraitAt(OldIndex, TraitType, InTraitData);

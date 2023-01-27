@@ -26,6 +26,8 @@ DECLARE_CYCLE_STAT(TEXT("Belts ~ Fetch Details"), STAT_Belts_FetchDetails,
 DECLARE_CYCLE_STAT(TEXT("Belt ~ Fetch Details"), STAT_Belt_FetchDetails,
 				   STATGROUP_Machine);
 
+UBelt::ChildLinesCacheEntryType UBelt::EmptyChildLinesEntry;
+
 EApparatusStatus
 UBelt::ReleaseSlotAt(const int32 SlotIndex)
 {
@@ -42,75 +44,6 @@ UBelt::ReleaseSlotAt(const int32 SlotIndex)
 
 	// The method does everything needed:
 	return Slot.SetRemoved();
-}
-
-EApparatusStatus
-FBeltSlot::SetRemoved(const bool bInRemoved) 
-{
-	check(Owner);
-	if (UNLIKELY(bInRemoved == bStale))
-	{
-		return EApparatusStatus::Noop;
-	}
-	bStale = bInRemoved;
-	if (bInRemoved)
-	{
-		if (LIKELY(Subjective && (Subjective->GetBelt() == Owner)))
-		{
-			// Clear the subjective slot if it's still
-			// associated with this belt:
-			Subjective->TakeBeltSlot(nullptr, InvalidIndex);
-		}
-		if (IsLocked())
-		{
-			// The belt is currently locked, and an iterable
-			// slot is being removed. We have to defer
-			// the actual removal for later, when the belt gets unlocked...
-			Owner->EnqueueForRemoval(Index);
-		}
-		else
-		{
-			// If the slot is not locked now,
-			// clear it instantly:
-			Subjective = nullptr;
-			ResetDetails();
-
-			check(Owner->Count >= 1);
-			Owner->Count -= 1;
-
-			auto& Slots = Owner->Slots;
-
-			if (UNLIKELY(Index == Owner->Count))
-			{
-				// The last slot is about to be removed.
-				// Do nothing and return:
-				return EApparatusStatus::Success;
-			}
-
-			// This is not the last slot to be removed.
-			// Swap it with the last one...
-			const auto IndexSave = Index; // Index needs to be saved.
-			Slots.Swap(Index, Owner->Count);
-			// Restore the indices...
-			Slots[Owner->Count].Index = Owner->Count;
-			Index = IndexSave;
-
-			// We now should be in a new state of a swapped in slot:
-			check(this == std::addressof(Slots[Index]));
-			if (LIKELY(Subjective))
-			{
-				// Change the subjective's slot
-				// to a new present place:
-				Subjective->TakeBeltSlot(Owner, Index);
-			}
-		}
-	}
-	else
-	{
-		checkf(!Subjective,
-			   TEXT("Only subjective-cleared slots may be set as not removed."));
-	}
-	return EApparatusStatus::Success;
 }
 
 void

@@ -16,14 +16,16 @@
  */
 
 template < EParadigm Paradigm/*=EParadigm::Default*/ >
-TOutcome<Paradigm>
+inline TOutcome<Paradigm>
 UBelt::Expand(const FDetailmark& InDetailmark)
 {
 	checkf(bSparse, TEXT("Only sparse belts may be expanded."));
 
-	EApparatusStatus Status = Detailmark.template AddDecomposed<MakePolite(Paradigm)>(InDetailmark);
+	const auto DetailsNumSave = Detailmark.DetailsNum();
+	EApparatusStatus Status = Detailmark.template Add<MakePolite(Paradigm)>(InDetailmark);
 	if (UNLIKELY(Status != EApparatusStatus::Success))
 	{
+		// Nothing was done or an error has happened:
 		return Status;
 	}
 
@@ -31,6 +33,33 @@ UBelt::Expand(const FDetailmark& InDetailmark)
 	for (FBeltSlot& Slot : Slots)
 	{
 		Slot.Expand();
+	}
+
+	// Calculate the cached lines indices for new detail lines...
+	for (auto li = DetailsNumSave; li < Detailmark.DetailsNum(); ++li)
+	{
+		const auto DetailClass = Detailmark[li];
+		for (auto Parent = DetailClass; Parent != nullptr; Parent = Parent->GetSuperClass())
+		{
+			auto& LinesCache = ChildLinesCache.FindOrAdd(Parent);
+			for (int32 di = 0; di < Detailmark.DetailsNum(); ++di)
+			{
+				if (Detailmark[di]->IsChildOf(Parent))
+				{
+					if ((Detailmark[di] == Parent)
+					 && ((LinesCache.Num() == 0) ||
+						 (LinesCache[0] != di)))
+					{
+						// Exact matches must always be the first ones:
+						InsertSwap(LinesCache, di, 0);
+					}
+					else
+					{
+						LinesCache.AddUnique(di);
+					}
+				}
+			}
+		}
 	}
 
 	const auto Mechanism = GetOwner();

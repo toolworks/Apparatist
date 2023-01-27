@@ -64,6 +64,8 @@ struct TChunkIt final
 	 */
 	typedef typename SubjectHandleType::SubjectivePtrType SubjectivePtrType;
 
+	using SlotIndexType = FSubjectInfo::SlotIndexType;
+
 	/**
 	 * The solidity state of the chunk iterator.
 	 */
@@ -189,7 +191,7 @@ struct TChunkIt final
 	 * The index of the current subject
 	 * this iterator points to within the chunk.
 	 */
-	int32 SlotIndex = InvalidSlotIndex;
+	SlotIndexType SlotIndex = InvalidSlotIndex;
 
 	/**
 	 * Do unlock the chunk (if is currently locked).
@@ -625,6 +627,200 @@ struct TChunkIt final
 		return GetTraitRef<Paradigm, T>();
 	}
 
+#pragma region Multi-Trait Data Access
+	/// @name Multi-Trait Data Access
+	/// @{
+
+	/**
+	 * Get a list of pointers to immutable trait data.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitVoidPtrResultSecurity<Paradigm> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(UScriptStruct* const             TraitType,
+				  TArray<const void*, AllocatorT>& OutTraits) const
+	{
+		if (AvoidFormat(Paradigm, !IsViable(), TEXT("The chunk iterator is not valid to get a list of trait pointers from. Is it at the end?")))
+		{
+			return MakeOutcome<Paradigm>(EApparatusStatus::InvalidState);
+		}
+		if (AvoidFormat(Paradigm, !Chunk->IsLocked(), TEXT("The iterator's chunk is not locked. Is the iterator used outside of its iteration loop?")))
+		{
+			return MakeOutcome<Paradigm>(EApparatusStatus::InvalidState);
+		}
+
+		const auto& Slot = Chunk->Slots[SlotIndex];
+		if (UNLIKELY(Slot.IsStale()))
+		{
+			// The subject was moved from the chunk.
+			// Get the data from its actual present place...
+			return Slot.template GetHandle<SubjectHandleT>().template GetTraitsPtrs<Paradigm>(TraitType, OutTraits);
+		}
+
+		return Chunk->template TraitsPtrsAt<Paradigm>(SlotIndex, TraitType, OutTraits);
+	}
+
+	/**
+	 * Get a list of pointers to mutable trait data.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitVoidPtrResultSecurity<Paradigm> = true,
+			   more::enable_if_t<AllowsChanges || IsUnsafe(Paradigm), bool> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(UScriptStruct* const       TraitType,
+				  TArray<void*, AllocatorT>& OutTraits) const
+	{
+		if (AvoidFormat(Paradigm, !IsViable(), TEXT("The chunk iterator is not valid to get a list of mutable trait pointers from. Is it at the end?")))
+		{
+			return MakeOutcome<Paradigm>(EApparatusStatus::InvalidState);
+		}
+		if (AvoidFormat(Paradigm, !Chunk->IsLocked(), TEXT("The iterator's chunk is not locked. Is the iterator used outside of its iteration loop?")))
+		{
+			return MakeOutcome<Paradigm>(EApparatusStatus::InvalidState);
+		}
+
+		const auto& Slot = Chunk->Slots[SlotIndex];
+		if (UNLIKELY(Slot.IsStale()))
+		{
+			// The subject was moved from the chunk.
+			// Get the data from its actual present place...
+			return Slot.template GetHandle<SubjectHandleT>().template GetTraitsPtrs<Paradigm>(TraitType, OutTraits);
+		}
+
+		return Chunk->template TraitsPtrsAt<Paradigm>(SlotIndex, TraitType, OutTraits);
+	}
+
+	/**
+	 * Get a list of trait pointers from a current subject.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  T          = void,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(TArray<T*, AllocatorT>& OutTraits) const
+	{
+		if (AvoidFormat(Paradigm, !IsViable(), TEXT("The chunk iterator is not valid to get a list of trait pointers from. Is it at the end?")))
+		{
+			return EApparatusStatus::InvalidState;
+		}
+		if (AvoidFormat(Paradigm, !Chunk->IsLocked(), TEXT("The iterator's chunk is not locked. Is the iterator used outside of its iteration loop?")))
+		{
+			return EApparatusStatus::InvalidState;
+		}
+
+		const auto& Slot = Chunk->Slots[SlotIndex];
+		if (UNLIKELY(Slot.IsStale()))
+		{
+			// The subject was moved from the chunk.
+			// Get the data from its actual present place...
+			return Slot.template GetHandle<SubjectHandleT>().template GetTraitsPtrs<Paradigm>(OutTraits);
+		}
+
+		return Chunk->template TraitsPtrsAt<Paradigm>(SlotIndex, OutTraits);
+	}
+
+	/**
+	 * Get a list of trait pointers by their common type from a current subject.
+	 * Dynamically-typed version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitVoidPtrResultSecurity<Paradigm> = true >
+	FORCEINLINE TOutcome<Paradigm, TArray<TTraitVoidPtrResult<Paradigm>, AllocatorT>>
+	GetTraitsPtrs(UScriptStruct* const TraitType) const
+	{
+		using ArrayType = TArray<TTraitVoidPtrResult<Paradigm>, AllocatorT>;
+		ArrayType TraitsTemp;
+		if (AvoidError(Paradigm, GetTraitsPtrs<Paradigm>(TraitType, TraitsTemp)))
+		{
+			return MakeOutcome<Paradigm, ArrayType>(FApparatusStatus::GetLastError(), TraitsTemp);
+		}
+		return MakeOutcome<Paradigm, ArrayType, EApparatusStatus::Success>(MoveTemp(TraitsTemp));
+	}
+
+	/**
+	 * Get a list of trait pointers from a current subject.
+	 * Statically-typed version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam T The type of traits to get. May have a @c const specifier.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm, typename T,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	FORCEINLINE TOutcome<Paradigm, TArray<TTraitPtrResult<Paradigm, T>, AllocatorT>>
+	GetTraitsPtrs() const
+	{
+		using ArrayType = TArray<TTraitPtrResult<Paradigm, T>, AllocatorT>;
+		ArrayType TraitsTemp;
+		if (AvoidError(Paradigm, GetTraitsPtrs<Paradigm>(TraitType, TraitsTemp)))
+		{
+			return MakeOutcome<Paradigm, ArrayType>(FApparatusStatus::GetLastError(), TraitsTemp);
+		}
+		return MakeOutcome<Paradigm, ArrayType, EApparatusStatus::Success>(MoveTemp(TraitsTemp));
+	}
+
+	/**
+	 * Get a list of trait pointers.
+	 * Statically-typed default paradigm version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam T The type of traits to get. May have a @c const specifier.
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @return The resulting list of traits.
+	 */
+	template < typename  T,
+			   EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	FORCEINLINE auto
+	GetTraitsPtrs() const
+	{
+		return GetTraitsPtrs<Paradigm, T>();
+	}
+
+	/// @}
+#pragma endregion Multi-Trait Data Access
+
 	/**
 	 * Get a trait pointer at a line index from a currently iterated subject.
 	 * 
@@ -640,7 +836,9 @@ struct TChunkIt final
 	FORCEINLINE TOutcome<Paradigm, T>
 	TraitAtLine(const int32 TraitLineIndex) const
 	{
-		check(TraitLineIndex >= 0);
+		checkf(TraitLineIndex >= 0, TEXT("The trait line index must be valid, while accessing a '%s' trait. "
+										 "Is this trait missing from the subject you're iterating upon?"),
+										 *(T::StaticStruct()->GetName()));
 		if (AvoidFormat(Paradigm, !IsViable(), TEXT("The chunk iterator is not valid to get a trait pointer with hinting from. Is it at the end?")))
 		{
 			return MakeOutcome<Paradigm, T>(EApparatusStatus::InvalidState, T());
@@ -677,7 +875,9 @@ struct TChunkIt final
 	FORCEINLINE TOutcome<Paradigm, TTraitVoidPtrResult<Paradigm>>
 	TraitPtrAtLine(UScriptStruct* TraitType, const int32 TraitLineIndex) const
 	{
-		check(TraitLineIndex >= 0);
+		checkf(TraitLineIndex >= 0, TEXT("The trait line index must be valid, while accessing a '%s' trait. "
+										 "Is this trait missing from the subject you're iterating upon?"),
+										 *(TraitType->GetName()));
 		if (AvoidFormat(Paradigm, TraitType == nullptr, TEXT("A valid trait type must be provided.")))
 		{
 			return MakeOutcome<Paradigm, TTraitVoidPtrResult<Paradigm>>(EApparatusStatus::InvalidArgument, nullptr);
@@ -846,11 +1046,16 @@ struct TChunkIt final
 	 * @param DetailClass The class of the detail to get.
 	 */
 	template < EParadigm Paradigm = EParadigm::Default,
-			   TDetailPtrResultSecurity<UDetail> = 0 >
+			   TDetailPtrResultSecurity<UDetail> = true >
 	FORCEINLINE TOutcome<Paradigm, TDetailPtrResult<UDetail>>
 	GetDetail(const TSubclassOf<UDetail> DetailClass) const
 	{
-		return GetSubjective()->template GetDetail<Paradigm>(DetailClass);
+		const auto Subjective = GetSubjective();
+		if (LIKELY(Subjective != nullptr))
+		{
+			return GetSubjective()->template GetDetail<Paradigm>(DetailClass);
+		}
+		return MakeOutcome<Paradigm, TDetailPtrResult<UDetail>, EApparatusStatus::NoItems>(nullptr);
 	}
 
 	/**
@@ -860,11 +1065,16 @@ struct TChunkIt final
 	 * @tparam D The class of the detail to get.
 	 */
 	template < EParadigm Paradigm, class D,
-			   TDetailPtrResultSecurity<D> = 0 >
+			   TDetailPtrResultSecurity<D> = true >
 	FORCEINLINE TOutcome<Paradigm, TDetailPtrResult<D>>
 	GetDetail() const
 	{
-		return GetSubjective()->template GetDetail<Paradigm, D>();
+		const auto Subjective = GetSubjective();
+		if (LIKELY(Subjective != nullptr))
+		{
+			return GetSubjective()->template GetDetail<Paradigm, D>();
+		}
+		return MakeOutcome<Paradigm, TDetailPtrResult<D>, EApparatusStatus::NoItems>(nullptr);
 	}
 
 	/**
@@ -874,11 +1084,30 @@ struct TChunkIt final
 	 * @tparam Paradigm The paradigm to work under.
 	 */
 	template < class D, EParadigm Paradigm = EParadigm::Default,
-			   TDetailPtrResultSecurity<D> = 0 >
+			   TDetailPtrResultSecurity<D> = true >
 	FORCEINLINE TOutcome<Paradigm, TDetailPtrResult<D>>
 	GetDetail() const
 	{
 		return GetDetail<Paradigm, D>();
+	}
+
+	/**
+	 * Get a list of immutable details of the subjective part.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   class     D          = UDetail,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TDetailPtrResultSecurity<D> = true >
+	FORCEINLINE auto
+	GetDetails(TArray<D*, AllocatorT>& OutDetails) const
+	{
+		const auto Subjective = GetSubjective();
+		if (LIKELY(Subjective != nullptr))
+		{
+			return Subjective->template GetDetails<Paradigm>(OutDetails);
+		}
+		OutDetails.Reset();
+		return MakeOutcome<Paradigm, EApparatusStatus::NoItems>();
 	}
 
 	/// @}

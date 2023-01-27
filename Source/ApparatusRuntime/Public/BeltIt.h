@@ -67,6 +67,11 @@ struct TBeltIt final
 	typedef SubjectHandleT SubjectHandleType;
 
 	/**
+	 * The type of the detail line type.
+	 */
+	using DetailLineIndexType = FBeltSlot::DetailLineIndexType;
+
+	/**
 	 * The type of the subjective used.
 	 */
 	typedef typename SubjectHandleType::SubjectivePtrType SubjectivePtrType;
@@ -97,14 +102,9 @@ struct TBeltIt final
 	static constexpr auto InvalidSlotIndex = FBeltSlot::InvalidIndex;
 
 	/**
-	 * Invalid combination index.
-	 */
-	static constexpr auto InvalidComboIndex = FBeltSlot::InvalidComboIndex;
-
-	/**
 	 * Invalid detail index.
 	 */
-	static constexpr auto InvalidDetailIndex = UBelt::InvalidDetailLineIndex;
+	static constexpr auto InvalidDetailLineIndex = UBelt::InvalidDetailLineIndex;
 
 	/**
 	 * The solidity state of the iterator.
@@ -212,24 +212,10 @@ struct TBeltIt final
 	int32 SlotIndex = InvalidSlotIndex;
 
 	/**
-	 * The index of the current sub-slot combination.
-	 */
-	int32 ComboIndex = InvalidComboIndex;
-
-	/**
-	 * Pre-calculated number of combos within the
-	 * current slot (if any).
-	 */
-	int32 CombosCount = -1;
-
-	/**
 	 * The indices of the details being
 	 * actually used within the iterating process.
-	 *
-	 * Used for faster access to the details.
-	 * Fetched during the construction.
 	 */
-	TArray<int32> MainlineIndices;
+	TArray<DetailLineIndexType, TInlineAllocator<8>> MainlineIndices;
 
 	/**
 	 * Unlock the belt of the iterator.
@@ -246,11 +232,7 @@ struct TBeltIt final
 		{
 			EnsureOK(Belt->Unlock<IsSolid>());
 		}
-		// Clear the state still, since we are using
-		// a weak pointer for the owner and it could get invalid
-		// and is locking returning false...
-		SlotIndex  = InvalidSlotIndex;
-		ComboIndex = InvalidComboIndex;
+		SlotIndex = InvalidSlotIndex;
 		return EApparatusStatus::Success;
 	}
 
@@ -276,10 +258,10 @@ struct TBeltIt final
 	/**
 	 * Construct an iterator with its owner and a slot index.
 	 */
-	FORCEINLINE
+	inline
 	TBeltIt(UBelt* const   InBelt,
 			const FFilter& InFilter,
-			const int32    InSlotIndex  = InvalidSlotIndex)
+			const int32    InSlotIndex = InvalidSlotIndex)
 	  : Belt(InBelt)
 	  , Filter(InFilter)
 	  , SlotIndex(InSlotIndex) 
@@ -292,23 +274,25 @@ struct TBeltIt final
 		if (LIKELY(!Filter.Includes(EFlagmarkBit::Editor))) // Editor entities can be included explicitly.
 		{
 			const auto World = Belt->GetWorld();
-			if (World && World->IsGameWorld())
+			if (LIKELY(World && World->IsGameWorld()))
 			{
 				// Exclude the in-editor subjects during the gameplay iterating.
 				Filter.Exclude(EFlagmarkBit::Editor);
 			}
 		}
-#endif
-		// Fetch the indices of the utilized details:
-		Filter.GetDetailmark().FindMappingTo(Belt->GetDetailmark(), MainlineIndices);
+#endif // WITH_EDITOR
 
-		if (LIKELY(SlotIndex > InvalidSlotIndex))
+
+		// Fetch the indices of the utilized details:
+		Belt->CollectMainlineIndices(Filter.GetDetailmark().GetDetails(), /*Out=*/MainlineIndices);
+
+		if (LIKELY(SlotIndex != InvalidSlotIndex))
 		{
 			VerifyOK(Belt->template Lock<IsSolid>());
 
 			// Skip invalid slots...
 			while ((SlotIndex < Belt->IterableNum()) &&
-				   ((CombosCount = Belt->Slots[SlotIndex].PrepareForIteration(Filter, MainlineIndices)) == 0))
+				   (!Belt->Slots[SlotIndex].PrepareForIteration(Filter, MainlineIndices)))
 			{
 				SlotIndex += 1;
 			}
@@ -319,23 +303,6 @@ struct TBeltIt final
 				Unlock();
 				return;
 			}
-
-			// We have found a valid slot to begin with.
-			// Now we have to find the valid combination within this slot...
-			const FBeltSlot& NewSlot = Belt->Slots[SlotIndex];
-			for (ComboIndex = 0; ComboIndex < CombosCount; ComboIndex += 1)
-			{
-				if (NewSlot.IsComboValid(MainlineIndices, ComboIndex))
-				{
-					// A valid combo was found.
-					return;
-				}
-			}
-			
-			checkf(false,
-				TEXT("No valid combination was found, while the slot preparation succeeded ")
-				TEXT("during beginning of the iterating. This should never happen."));
-			Unlock();
 		}
 	}
 
@@ -373,20 +340,8 @@ struct TBeltIt final
 	{
 		check(Belt);
 		check(Belt->IsLocked());
-		check(SlotIndex > FBeltSlot::InvalidIndex);
+		check(SlotIndex != FBeltSlot::InvalidIndex);
 		return GetFilter().GetDetailmark();
-	}
-
-	/**
-	 * Get the indices of the used details during the iterating.
-	 * 
-	 * Maps indices from the current filter's detailmark
-	 * to the belt's detailmark.
-	 */
-	FORCEINLINE const TArray<int32>&
-	GetMainlineDetailsIndices() const
-	{
-		return MainlineIndices;
 	}
 
 	/**
@@ -401,29 +356,11 @@ struct TBeltIt final
 	}
 
 	/**
-	 * Get the current sub-slot combination index.
-	 */
-	FORCEINLINE int32
-	GetComboIndex() const
-	{
-		return ComboIndex;
-	}
-
-	/**
-	 * Get the current number of combinations
-	 * within the active slot.
-	 */
-	FORCEINLINE int32
-	GetCombosCount() const
-	{
-		return CombosCount;
-	}
-
-	/**
 	 * Construct a new uninitialized iterator.
 	 */
 	FORCEINLINE
-	TBeltIt() {}
+	TBeltIt()
+	{}
 
 	/**
 	 * Move-construct a new belt iterator.
@@ -433,13 +370,10 @@ struct TBeltIt final
 	  : Belt           (InIterator.Belt)
 	  , Filter         (MoveTemp(InIterator.Filter))
 	  , SlotIndex      (InIterator.SlotIndex) 
-	  , ComboIndex     (InIterator.ComboIndex)
-	  , CombosCount    (InIterator.CombosCount)
 	  , MainlineIndices(MoveTemp(InIterator.MainlineIndices))
 	{
 		InIterator.Belt       = nullptr;
 		InIterator.SlotIndex  = InvalidSlotIndex;
-		InIterator.ComboIndex = InvalidComboIndex;
 	}
 
 	/**
@@ -448,9 +382,7 @@ struct TBeltIt final
 	TBeltIt(const TBeltIt& InIterator)
 	  : Belt           (InIterator.Belt)
 	  , Filter         (InIterator.Filter)
-	  , SlotIndex      (InIterator.SlotIndex) 
-	  , ComboIndex     (InIterator.ComboIndex)
-	  , CombosCount    (InIterator.CombosCount)
+	  , SlotIndex      (InIterator.SlotIndex)
 	  , MainlineIndices(InIterator.MainlineIndices)
 	{
 		if (LIKELY(Belt))
@@ -458,14 +390,12 @@ struct TBeltIt final
 			if (LIKELY(SlotIndex > InvalidSlotIndex))
 			{
 				// The belt should be locked...
-				check(ComboIndex > InvalidComboIndex);
 				VerifyOK(Belt->template Lock<IsSolid>());
 			}
 		}
 		else
 		{
 			check(SlotIndex <= InvalidSlotIndex);
-			check(ComboIndex <= InvalidComboIndex);
 		}
 	}
 
@@ -491,8 +421,6 @@ struct TBeltIt final
 		Belt            = InIterator.Belt;
 		Filter          = MoveTemp(InIterator.Filter);
 		SlotIndex       = InIterator.SlotIndex;
-		ComboIndex      = InIterator.ComboIndex;
-		CombosCount     = InIterator.CombosCount;
 		MainlineIndices = MoveTemp(InIterator.MainlineIndices);
 
 		return *this;
@@ -511,11 +439,9 @@ struct TBeltIt final
 		Belt            = InIterator.Belt;
 		Filter          = InIterator.Filter;
 		SlotIndex       = InIterator.SlotIndex;
-		ComboIndex      = InIterator.ComboIndex;
-		CombosCount     = InIterator.CombosCount;
 		MainlineIndices = InIterator.MainlineIndices;
 
-		if (Belt && (SlotIndex > InvalidSlotIndex))
+		if (Belt && (SlotIndex != InvalidSlotIndex))
 		{
 			Belt->Lock<IsSolid>();
 		}
@@ -536,11 +462,8 @@ struct TBeltIt final
 	FORCEINLINE bool
 	IsViable() const
 	{
-		checkf((SlotIndex <= InvalidSlotIndex) ||
-			   (ComboIndex > InvalidComboIndex),
-			   TEXT("A valid slot index should guarantee a valid combination index."));
 		// These should be exactly enough:
-		return Belt && (SlotIndex > InvalidSlotIndex);
+		return Belt && (SlotIndex != InvalidSlotIndex);
 	}
 
 	/**
@@ -561,7 +484,7 @@ struct TBeltIt final
 	{
 		check(Belt);
 		check(Belt->IsLocked());
-		check(SlotIndex > FBeltSlot::InvalidIndex);
+		check(SlotIndex != FBeltSlot::InvalidIndex);
 		return Belt->Slots[SlotIndex];
 	}
 
@@ -590,14 +513,48 @@ struct TBeltIt final
 	/**
 	 * Get a detail at a certain index.
 	 * 
-	 * @param DetailIndex The detail index, relative
+	 * @param DetailLineIndex The detail index, relative
 	 * to the belt's detailmark.
 	 * @return The detail at the specified index.
 	 */
 	FORCEINLINE UDetail*
-	DetailAt(const int32 DetailIndex) const
+	DetailAtLine(const int32 DetailLineIndex) const
 	{
-		return GetSlot().DetailAt(MainlineIndices, ComboIndex, DetailIndex);
+		return GetSlot().DetailAtLine(DetailLineIndex);
+	}
+
+	/**
+	 * Get details at a certain line index.
+	 * 
+	 * @param DetailLineIndex The detail index, relative
+	 * to the belt's detailmark.
+	 * @return The detail at the specified index.
+	 */
+	template < typename AllocatorT = FDefaultAllocator >
+	FORCEINLINE void
+	DetailsAtLine(const int32                   DetailLineIndex,
+				  TArray<UDetail*, AllocatorT>& OutDetails) const
+	{
+		GetSlot().DetailsAtLine(DetailLineIndex, OutDetails);
+	}
+
+	/**
+	 * Get details at a certain line index.
+	 * 
+	 * @tparam LinesAllocatorT The allocator used within the lines array.
+	 * @tparam AllocatorT The type of the allocator used within the details array.
+	 * @param[in] DetailLinesIndices The line indices of the details
+	 * relative to the belt's detailmark.
+	 * @param[out] OutDetails The details receiver.
+	 * @return The detail at the specified index.
+	 */
+	template < typename LinesAllocatorT = FDefaultAllocator,
+			   typename AllocatorT      = FDefaultAllocator >
+	FORCEINLINE void
+	DetailsAtLines(const TArray<int32, LinesAllocatorT>& DetailLinesIndices,
+				   TArray<UDetail*, AllocatorT>&         OutDetails) const
+	{
+		GetSlot().DetailsAtLines(DetailLinesIndices, OutDetails);
 	}
 
 	/**
@@ -607,7 +564,7 @@ struct TBeltIt final
 	FORCEINLINE auto
 	GetDetail(const TSubclassOf<UDetail> DetailClass) const
 	{
-		return GetSlot().GetDetail(MainlineIndices, ComboIndex, DetailClass);
+		return GetSlot().template GetDetail<Paradigm>(DetailClass);
 	}
 
 	/**
@@ -618,7 +575,7 @@ struct TBeltIt final
 	FORCEINLINE auto
 	GetDetail() const
 	{
-		return GetSlot().template GetDetail<Paradigm, D>(MainlineIndices, ComboIndex);
+		return GetSlot().template GetDetail<Paradigm, D>();
 	}
 
 	/**
@@ -629,7 +586,32 @@ struct TBeltIt final
 	FORCEINLINE auto
 	GetDetail() const
 	{
-		return GetSlot().template GetDetail<Paradigm, D>(MainlineIndices, ComboIndex);
+		return GetSlot().template GetDetail<Paradigm, D>();
+	}
+
+	/**
+	 * Get a list of details of the subjective on the current iteration.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator >
+	FORCEINLINE auto
+	GetDetails(const TSubclassOf<UDetail>    DetailClass,
+			   TArray<UDetail*, AllocatorT>& OutDetails) const
+	{
+		return GetSlot().template GetDetails<Paradigm>(DetailClass, OutDetails);
+	}
+
+	/**
+	 * Get a list of details of the subjective on the current iteration.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   class     D          = UDetail,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TDetailClassSecurity<D> = true >
+	FORCEINLINE auto
+	GetDetails(TArray<D*, AllocatorT>& OutDetails) const
+	{
+		return GetSlot().template GetDetails<Paradigm>(OutDetails);
 	}
 
 	/// @}
@@ -677,14 +659,12 @@ struct TBeltIt final
 	 * @return nullptr If the detail is not available.
 	 */
 	template < EParadigm Paradigm = EParadigm::Default,
-			   TDetailPtrResultSecurity<UDetail> = 0 >
+			   TDetailPtrResultSecurity<UDetail> = true >
 	FORCEINLINE TOutcome<Paradigm, UDetail*>
 	GetDetailHinted(const TSubclassOf<UDetail> DetailClass,
 					const int32                DetailIndexHint) const
 	{
-		return GetSlot().template GetDetailHinted<Paradigm>(
-										MainlineIndices, ComboIndex, DetailClass,
-										DetailIndexHint);
+		return GetSlot().template GetDetailHinted<Paradigm>(DetailClass, DetailIndexHint);
 	}
 
 	/**
@@ -697,12 +677,11 @@ struct TBeltIt final
 	 * @return nullptr If the detail is not available.
 	 */
 	template < EParadigm Paradigm, class D,
-			   TDetailPtrResultSecurity<D> = 0 >
+			   TDetailPtrResultSecurity<D> = true >
 	FORCEINLINE TOutcome<Paradigm, TDetailPtrResult<D>>
 	GetDetailHinted(const int32 DetailIndexHint) const
 	{
-		return GetSlot().template GetDetailHinted<D>(MainlineIndices, ComboIndex,
-													 DetailIndexHint);
+		return GetSlot().template GetDetailHinted<D>(DetailIndexHint);
 	}
 
 	/**
@@ -715,7 +694,7 @@ struct TBeltIt final
 	 * @return nullptr If the detail is not available.
 	 */
 	template < class D, EParadigm Paradigm = EParadigm::Default,
-			   TDetailPtrResultSecurity<D> = 0 >
+			   TDetailPtrResultSecurity<D> = true >
 	FORCEINLINE TOutcome<Paradigm, TDetailPtrResult<D>>
 	GetDetailHinted(const int32 DetailIndexHint) const
 	{
@@ -738,7 +717,7 @@ struct TBeltIt final
 	 * @return A pointer to the trait data.
 	 */
 	template < EParadigm Paradigm = EParadigm::Default,
-			   TTraitVoidPtrResultSecurity<Paradigm> = 0  >
+			   TTraitVoidPtrResultSecurity<Paradigm> = true  >
 	FORCEINLINE TOutcome<Paradigm, TTraitVoidPtrResult<Paradigm>>
 	GetTraitPtr(UScriptStruct* const TraitType) const
 	{
@@ -754,7 +733,7 @@ struct TBeltIt final
 	 * @return The pointer to the trait data.
 	 */
 	template < EParadigm Paradigm, typename T,
-			   TTraitPtrResultSecurity<Paradigm, T> = 0 >
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
 	FORCEINLINE TOutcome<Paradigm, TTraitPtrResult<Paradigm, T>>
 	GetTraitPtr() const
 	{
@@ -770,7 +749,7 @@ struct TBeltIt final
 	 * @return The pointer to the trait data.
 	 */
 	template < typename T, EParadigm Paradigm = EParadigm::Default,
-			   TTraitPtrResultSecurity<Paradigm, T> = 0 >
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
 	FORCEINLINE TOutcome<Paradigm, TTraitPtrResult<Paradigm, T>>
 	GetTraitPtr() const
 	{
@@ -786,7 +765,7 @@ struct TBeltIt final
 	 * @return A reference to the trait.
 	 */
 	template < EParadigm Paradigm, typename T,
-			   TTraitRefResultSecurity<Paradigm, T> = 0 >
+			   TTraitRefResultSecurity<Paradigm, T> = true >
 	FORCEINLINE TOutcome<Paradigm, TTraitRefResult<Paradigm, T>>
 	GetTraitRef() const
 	{
@@ -802,12 +781,165 @@ struct TBeltIt final
 	 * @return A reference to the trait.
 	 */
 	template < typename T, EParadigm Paradigm = EParadigm::Default,
-			    TTraitRefResultSecurity<Paradigm, T> = 0 >
+			    TTraitRefResultSecurity<Paradigm, T> = true >
 	FORCEINLINE TOutcome<Paradigm, TTraitRefResult<Paradigm, T>>
 	GetTraitRef() const
 	{
 		return GetSubject().template GetTraitRef<T, Paradigm>();
 	}
+
+#pragma region Multi-Trait Data Access
+	/// @name Multi-Trait Data Access
+	/// @{
+
+	/**
+	 * Get a list of trait pointers into an array of immutable data.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitVoidPtrResultSecurity<Paradigm> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(UScriptStruct* const             TraitType,
+				 TArray<const void*, AllocatorT>& OutTraits) const
+	{
+		return GetSubject()->template GetTraitsPtrs<Paradigm>(TraitType, OutTraits);
+	}
+
+	/**
+	 * Get a list of trait pointers.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitVoidPtrResultSecurity<Paradigm> = true,
+			   more::enable_if_t<AllowsChanges || IsUnsafe(Paradigm), bool> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(UScriptStruct* const       TraitType,
+				  TArray<void*, AllocatorT>& OutTraits) const
+	{
+		return GetSubject()->template GetTraitsPtrs<Paradigm>(TraitType, OutTraits);
+	}
+
+	/**
+	 * Get a list of pointers to immutable traits data.
+	 * Statically-typed version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  T          = void,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	FORCEINLINE auto
+	GetTraitsPtrs(TArray<const T*, AllocatorT>& OutTraits) const
+	{
+		return GetSubject()->template GetTraitsPtrs<Paradigm>(OutTraits);
+	}
+
+	/**
+	 * Get a list of pointers to mutable traits data.
+	 * Statically-typed version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  T          = void,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	FORCEINLINE auto
+	GetTraitsPtrs(TArray<T*, AllocatorT>& OutTraits) const
+	{
+		return GetSubject()->template GetTraitsPtrs<Paradigm>(OutTraits);
+	}
+
+	/**
+	 * Get a list of trait pointers by their common type.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitVoidPtrResultSecurity<Paradigm> = true >
+	FORCEINLINE auto
+	GetTraitsPtrs(UScriptStruct* const TraitType) const
+	{
+		return GetSubject()->template GetTraitsPtrs<Paradigm>(TraitType);
+	}
+
+	/**
+	 * Get a list of trait pointers.
+	 * Mutable data version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam T The type of traits to get.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm,
+			   typename  T,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	FORCEINLINE auto
+	GetTraitsPtrs() const
+	{
+		return GetSubject()->template GetTraitsPtrs<Paradigm, T, AllocatorT>();
+	}
+
+	/**
+	 * Get a list of trait pointers.
+	 * Mutable data default paradigm version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam T The type of traits to get.
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @return The resulting list of traits.
+	 */
+	template < typename  T,
+			   EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	FORCEINLINE auto
+	GetTraitsPtrs() const
+	{
+		return GetSubject()->template GetTraitsPtrs<Paradigm, T, AllocatorT>();
+	}
+
+	/// @}
+#pragma endregion Multi-Trait Data Access
 
 	/// @}
 #pragma endregion Traits Data Access
@@ -911,20 +1043,8 @@ struct TBeltIt final
 	{
 		check(IsViable());
 		check(Belt->IsLocked());
-		check(ComboIndex > FBeltSlot::InvalidComboIndex);
 
 		const FBeltSlot& Slot = GetSlot();
-
-		// Try to go to the next valid combination within current slot...
-		while (++ComboIndex < CombosCount)
-		{
-			if (LIKELY(Slot.IsComboValid(MainlineIndices, ComboIndex)))
-			{
-				// The next valid combination within
-				// a current slot was found:
-				return EApparatusStatus::Success;
-			}
-		}
 
 		// We have iterated all of the available combintations within the slot
 		// and now have to advance to the next slot (if any)...
@@ -941,7 +1061,7 @@ struct TBeltIt final
 		SlotIndex += 1;
 
 		// Skip invalid slots...
-		while ((CombosCount = Belt->Slots[SlotIndex].PrepareForIteration(Filter, MainlineIndices)) == 0)
+		while (!Belt->Slots[SlotIndex].PrepareForIteration(Filter, MainlineIndices))
 		{
 			if (UNLIKELY(SlotIndex >= (Belt->IterableCount - 1))) // Overflow protection
 			{
@@ -951,28 +1071,8 @@ struct TBeltIt final
 			}
 			SlotIndex += 1;
 		}
-
-		// We found a valid slot to advance to...
-		const FBeltSlot& NewSlot = Belt->Slots[SlotIndex];
-
-		// Find the first valid combo within a new slot...
-		for (ComboIndex = 0;
-			 ComboIndex < CombosCount;
-			 ComboIndex += 1)
-		{
-			if (LIKELY(NewSlot.IsComboValid(MainlineIndices, ComboIndex)))
-			{
-				// A valid combo was actually found.
-				// Return an iterator pointing to it:
-				return EApparatusStatus::Success;
-			}
-		}
 		
-		checkf(false,
-			TEXT("No valid combination was found, while the slot preparation actually succeeded ")
-			TEXT("during advancing the iterating. This should never happen."));
-		MoveToEnd();
-		return EApparatusStatus::NotAvailable;
+		return EApparatusStatus::Success;
 	} //-Advance()
 
 	/**
@@ -981,7 +1081,7 @@ struct TBeltIt final
 	FORCEINLINE TBeltIt&
 	operator++()
 	{
-		verify(OK(Advance()));
+		VerifyOK(Advance());
 		return *this;
 	}
 
@@ -992,7 +1092,7 @@ struct TBeltIt final
 	operator++(int)
 	{
 		TBeltIt Save = *this;
-		verify(OK(Advance()));
+		VerifyOK(Advance());
 		return MoveTemp(Save);
 	}
 
@@ -1011,8 +1111,6 @@ struct TBeltIt final
 			return true;
 		if (SlotIndex != Other.SlotIndex)
 			return false;
-		if (ComboIndex != Other.ComboIndex)
-			return false;
 		return true;
 	}
 
@@ -1030,8 +1128,6 @@ struct TBeltIt final
 		if (IsViable() != Other.IsViable())
 			return true;
 		if (SlotIndex != Other.SlotIndex)
-			return true;
-		if (ComboIndex != Other.ComboIndex)
 			return true;
 		return false;
 	}

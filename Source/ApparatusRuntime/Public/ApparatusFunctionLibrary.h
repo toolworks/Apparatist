@@ -2369,7 +2369,7 @@ class APPARATUSRUNTIME_API UApparatusFunctionLibrary
 	static FORCEINLINE class UDetail*
 	AddSubjectiveDetail(TScriptInterface<ISubjective> Subjective,
 						TSubclassOf<UDetail>          DetailClass,
-						const bool                    bReuseDisabled = false)
+						const bool                    bReuseDisabled = true)
 	{
 		if (ensureMsgf(Subjective, TEXT("The subject must not be a None.")))
 		{

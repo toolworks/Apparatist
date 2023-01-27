@@ -736,6 +736,162 @@ struct APPARATUSRUNTIME_API FSubjectInfo
 		return GetTraitRef<Paradigm, T>();
 	}
 
+	/**
+	 * Get a list of trait pointers into an immutable array of data.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  AllocatorT = FDefaultAllocator >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(UScriptStruct* const             TraitType,
+				 TArray<const void*, AllocatorT>& OutTraits) const;
+
+	/**
+	 * Get a list of trait pointers.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  AllocatorT = FDefaultAllocator >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(UScriptStruct* const       TraitType,
+				 TArray<void*, AllocatorT>& OutTraits);
+
+	/**
+	 * Get a list of trait pointers.
+	 * Constant data version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  T          = void,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitTypeSecurity<T> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(TArray<const T*, AllocatorT>& OutTraits) const;
+
+	/**
+	 * Get a list of trait pointers.
+	 * Mutable data version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  T          = void,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitTypeSecurity<T> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(TArray<T*, AllocatorT>& OutTraits);
+
+	/**
+	 * Get a list of trait pointers into an immutable array of data.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  AllocatorT = FDefaultAllocator >
+	FORCEINLINE TOutcome<Paradigm, TArray<const void*, AllocatorT>>
+	GetTraitsPtrs(UScriptStruct* const TraitType) const
+	{
+		TArray<const void*, AllocatorT> TraitsTemp;
+		const auto Outcome = GetTraitsPtrs<Paradigm>(TraitType, TraitsTemp);
+		return MakeOutcome<Paradigm, TArray<const void*, AllocatorT>>(Outcome, MoveTemp(TraitsTemp));
+	}
+
+	/**
+	 * Get a list of trait pointers by their common type.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  AllocatorT = FDefaultAllocator >
+	FORCEINLINE TOutcome<Paradigm, TArray<void*, AllocatorT>>
+	GetTraitsPtrs(UScriptStruct* const TraitType)
+	{
+		TArray<void*, AllocatorT> TraitsTemp;
+		const auto Outcome = GetTraitsPtrs<Paradigm>(TraitType, TraitsTemp);
+		return MakeOutcome<Paradigm, TArray<void*, AllocatorT>>(Outcome, MoveTemp(TraitsTemp));
+	}
+
+	/**
+	 * Get a list of trait pointers.
+	 * Constant data version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam T The type of traits to get.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  T          = void,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitTypeSecurity<T> = true >
+	FORCEINLINE TOutcome<Paradigm, TArray<const T*, AllocatorT>>
+	GetTraitsPtrs() const
+	{
+		TArray<const T*, AllocatorT> TraitsTemp;
+		const auto Outcome = GetTraitsPtrs<Paradigm>(TraitType, TraitsTemp);
+		return MakeOutcome<Paradigm, TArray<const T*, AllocatorT>>(Outcome, MoveTemp(TraitsTemp));
+	}
+
+	/**
+	 * Get a list of trait pointers.
+	 * Mutable data version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam T The type of traits to get.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm   = EParadigm::DefaultInternal,
+			   typename  T          = void,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitTypeSecurity<T> = true >
+	TOutcome<Paradigm, TArray<T*, AllocatorT>>
+	GetTraitsPtrs()
+	{
+		TArray<T*, AllocatorT> TraitsTemp;
+		const auto Outcome = GetTraitsPtrs<Paradigm>(TraitType, TraitsTemp);
+		return MakeOutcome<Paradigm, TArray<T*, AllocatorT>>(Outcome, MoveTemp(TraitsTemp));
+	}
+
 	/// @}
 #pragma endregion Trait Data Access
 
@@ -834,6 +990,45 @@ struct APPARATUSRUNTIME_API FSubjectInfo
 			  const bool            bLeaveRedundant = true);
 
 	/**
+	 * Set a trait of the subject with a pointer it.
+	 * Statically-typed default paradigm version.
+	 * 
+	 * If the trait is not currently within the subject,
+	 * it gets created anew and set accordingly.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam T The type of the trait to set.
+	 * @param Trait The trait to initialize with.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm, typename T >
+	FORCEINLINE TOutcomeIf<Paradigm, IsTraitType<T>()>
+	SetTrait(const T* const Trait)
+	{
+		return SetTrait(T::StaticStruct(),
+						static_cast<const void*>(Trait));
+	}
+
+	/**
+	 * Set a trait of the subject with a pointer to it.
+	 * Statically-typed default paradigm version.
+	 * 
+	 * If the trait is not currently within the subject,
+	 * it gets created anew and set accordingly.
+	 *
+	 * @tparam T The type of the trait to set.
+	 * @tparam Paradigm The paradigm to work under.
+	 * @param Trait A pointer to the trait to initialize with.
+	 * @return The outcome of the operation.
+	 */
+	template < typename T, EParadigm Paradigm = EParadigm::DefaultInternal >
+	FORCEINLINE auto
+	SetTrait(const T* const Trait)
+	{
+		return SetTrait<Paradigm, T>(Trait);
+	}
+
+	/**
 	 * Set a trait of the subject.
 	 * Templated paradigm version.
 	 * 
@@ -849,8 +1044,7 @@ struct APPARATUSRUNTIME_API FSubjectInfo
 	FORCEINLINE TOutcomeIf<Paradigm, IsTraitType<T>()>
 	SetTrait(const T& Trait)
 	{
-		return SetTrait(T::StaticStruct(),
-						static_cast<const void*>(&Trait));
+		return SetTrait(&Trait);
 	}
 
 	/**
@@ -2223,7 +2417,8 @@ struct APPARATUSRUNTIME_API FSubjectInfo
 	 * Copying of the subject information structures
 	 * is not supported.
 	 */
-	FSubjectInfo& operator=(const FSubjectInfo&) = delete;
+	FSubjectInfo&
+	operator=(const FSubjectInfo&) = delete;
 
 #pragma endregion Copying
 

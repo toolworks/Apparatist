@@ -164,3 +164,19 @@ constexpr bool IsDetailClass()
 {
 	return std::is_base_of<UDetail, D>::value;
 }
+
+/**
+ * A guarantee for a class to be a detail.
+ * 
+ * @tparam D The class to guarantee.
+ */
+template < class D >
+using TDetailClassSecurity = more::enable_if_t<IsDetailClass<D>(), bool>;
+
+/**
+ * A guarantee for a class to be a non-detail.
+ * 
+ * @tparam D The class to guarantee.
+ */
+template < class D >
+using TNonDetailClassSecurity = more::enable_if_t<!IsDetailClass<D>(), bool>;

@@ -358,7 +358,8 @@ struct APPARATUSRUNTIME_API FChunkSlot
 	 * Initialize a new empty chunk slot.
 	 */
 	FORCEINLINE
-	FChunkSlot() {}
+	FChunkSlot()
+	{}
 
 #pragma endregion Initialization
 

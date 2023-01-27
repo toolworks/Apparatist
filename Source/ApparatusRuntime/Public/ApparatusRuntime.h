@@ -43,6 +43,51 @@ template < typename ChunkItT, typename BeltItT, EParadigm Paradigm = EParadigm::
 struct TChain;
 
 /**
+ * Checks if a type can be considered an array.
+ */
+template < typename T >
+struct TArrayTypeChecker
+{
+	/**
+	 * The type is not an array.
+	 */
+	static constexpr bool Value = false;
+}; //-class TArrayTypeChecker
+
+template < typename ElementT, typename AllocatorT >
+struct TArrayTypeChecker<TArray<ElementT, AllocatorT>>
+{
+	/**
+	 * The type of the array elements.
+	 */
+	using ElementType = ElementT;
+
+	/**
+	 * The type of the array allocator.
+	 */
+	using AllocatorType = AllocatorT;
+
+	/**
+	 * The type is an array.
+	 */
+	static constexpr bool Value = true;
+
+}; //-class TArrayTypeChecker
+
+/**
+ * Check if the supplied type is actually an array.
+ * 
+ * @tparam T The type to examine.
+ * @return The state of examination.
+ */
+template < typename T >
+constexpr FORCEINLINE bool
+IsArrayType()
+{
+	return TArrayTypeChecker<T>::Value;
+}
+
+/**
  * The main Apparatus runtime module.
  */
 class APPARATUSRUNTIME_API FApparatusRuntimeModule : public IModuleInterface
@@ -62,10 +107,11 @@ class APPARATUSRUNTIME_API FApparatusRuntimeModule : public IModuleInterface
 /**
  * A utility function to reallocate an array.
  */
-APPARATUSRUNTIME_API FORCEINLINE void* Apparatus_ReallocArray(void* Original,
-															  int32 ElementsCount,
-															  int32 ElementSize,
-															  uint32 Alignment = 0U)
+APPARATUSRUNTIME_API FORCEINLINE void*
+Apparatus_ReallocArray(void* Original,
+					   int32 ElementsCount,
+					   int32 ElementSize,
+					   uint32 Alignment = 0U)
 {
 	return FMemory::Realloc(Original, (SIZE_T)ElementsCount * (SIZE_T)ElementSize, Alignment);
 }
@@ -73,9 +119,10 @@ APPARATUSRUNTIME_API FORCEINLINE void* Apparatus_ReallocArray(void* Original,
 /**
  * A utility function to allocate an array of elements.
  */
-APPARATUSRUNTIME_API FORCEINLINE void* Apparatus_MallocArray(int32 ElementsCount,
-															 int32 ElementSize,
-															 uint32 Alignment = 0U)
+APPARATUSRUNTIME_API FORCEINLINE void*
+Apparatus_MallocArray(int32 ElementsCount,
+					  int32 ElementSize,
+					  uint32 Alignment = 0U)
 {
 	return FMemory::Malloc((SIZE_T)ElementsCount * (SIZE_T)ElementSize, Alignment);
 }

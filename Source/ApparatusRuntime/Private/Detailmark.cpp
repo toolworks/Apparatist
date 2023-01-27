@@ -47,17 +47,17 @@ FDetailmark::PostSerialize(const FArchive& Archive)
 			const auto& Detail = Details[i];
 			if (UNLIKELY(!Detail))
 			{
-				// Null details are fine during the editing.
 #if !WITH_EDITOR
+				// Null details are removed at run-time:
 				Details.RemoveAtSwap(i--);
 #endif
 				continue;
 			}
 			const FBitMask& Mask = GetDetailMask(Detail);
-			if (UNLIKELY(DetailsMask.Includes(Mask)))
+			if (UNLIKELY(DetailsMask.Includes(Mask) && Details.Contains(Detail)))
 			{
-				// Duplicate details are fine during the editing.
 #if !WITH_EDITOR
+				// Duplicate details are removed at run-time:
 				Details.RemoveAtSwap(i--);
 #endif
 				continue;

@@ -1022,6 +1022,8 @@ struct TSubjectHandle
 	/**
 	 * The type of a trait pointer returned by the methods.
 	 * 
+	 * This ensures that immutable handles won't return non-const pointers.
+	 * 
 	 * @tparam Paradigm The access safety paradigm.
 	 * @tparam T The type of the trait.
 	 */
@@ -1621,7 +1623,7 @@ struct TSubjectHandle
 	 * @return nullptr If there is no such trait in the subject.
 	 */
 	template < typename T, EParadigm Paradigm = EParadigm::Default,
-			   TTraitPtrResultSecurity<Paradigm, T> = 0 >
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
 	FORCEINLINE TOutcome<Paradigm, TTraitPtrResult<Paradigm, T>>
 	GetTraitPtr() const
 	{
@@ -1640,7 +1642,7 @@ struct TSubjectHandle
 	 * @return A reference to the trait data.
 	 */
 	template < EParadigm Paradigm, typename T,
-			   TTraitRefResultSecurity<Paradigm, T> = 0 >
+			   TTraitRefResultSecurity<Paradigm, T> = true >
 	FORCEINLINE TOutcome<Paradigm, TTraitRefResult<Paradigm, T>>
 	GetTraitRef() const
 	{
@@ -1664,12 +1666,195 @@ struct TSubjectHandle
 	 * @return A reference to the trait data.
 	 */
 	template < typename T, EParadigm Paradigm = EParadigm::Default,
-			   TTraitRefResultSecurity<Paradigm, T> = 0 >
+			   TTraitRefResultSecurity<Paradigm, T> = true >
 	FORCEINLINE TOutcome<Paradigm, TTraitRefResult<Paradigm, T>>
 	GetTraitRef() const
 	{
 		return GetTraitRef<Paradigm, T>();
 	}
+
+#pragma region Multi-Trait Data Access
+	/// @name Multi-Trait Data Access
+	/// @{
+
+	/**
+	 * Get a list of trait pointers into an immutable array of data.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename AllocatorT = FDefaultAllocator,
+			   TTraitVoidPtrResultSecurity<Paradigm> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(UScriptStruct* const             TraitType,
+				  TArray<const void*, AllocatorT>& OutTraits) const
+	{
+		const auto Info = FindInfo();
+		if (AvoidCondition(Paradigm, Info == nullptr))
+		{
+			return EApparatusStatus::InvalidState;
+		}
+		return Info->template GetTraitsPtrs<Paradigm, AllocatorT>(TraitType, OutTraits);
+	}
+
+	/**
+	 * Get a list of trait pointers.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitVoidPtrResultSecurity<Paradigm> = true,
+			   more::enable_if_t<AllowsChanges || IsUnsafe(Paradigm), bool> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(UScriptStruct* const       TraitType,
+				  TArray<void*, AllocatorT>& OutTraits) const
+	{
+		const auto Info = FindInfo();
+		if (AvoidCondition(Paradigm, Info == nullptr))
+		{
+			return EApparatusStatus::InvalidState;
+		}
+		return Info->template GetTraitsPtrs<Paradigm, AllocatorT>(TraitType, OutTraits);
+	}
+
+	/**
+	 * Get a list of pointers to immutable traits data.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  T          = void,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(TArray<const T*, AllocatorT>& OutTraits) const
+	{
+		const auto Info = FindInfo();
+		if (AvoidCondition(Paradigm, Info == nullptr))
+		{
+			return EApparatusStatus::InvalidState;
+		}
+		return Info->template GetTraitsPtrs<Paradigm, T, AllocatorT>(OutTraits);
+	}
+
+	/**
+	 * Get a list of pointers to mutable traits data.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param OutTraits The results receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  T          = void,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	TOutcome<Paradigm>
+	GetTraitsPtrs(TArray<T*, AllocatorT>& OutTraits) const
+	{
+		const auto Info = FindInfo();
+		if (AvoidCondition(Paradigm, Info == nullptr))
+		{
+			return EApparatusStatus::InvalidState;
+		}
+		return Info->template GetTraitsPtrs<Paradigm, T, AllocatorT>(OutTraits);
+	}
+
+	/**
+	 * Get a list of trait pointers by their common type.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @param TraitType The type of the trait to get.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitVoidPtrResultSecurity<Paradigm> = true >
+	FORCEINLINE TOutcome<Paradigm, TArray<TTraitVoidPtrResult<Paradigm>, AllocatorT>>
+	GetTraitsPtrs(UScriptStruct* const TraitType) const
+	{
+		using ArrayType = TArray<TTraitVoidPtrResult<Paradigm>, AllocatorT>;
+		const auto Info = FindInfo();
+		if (AvoidCondition(Paradigm, Info == nullptr))
+		{
+			return MakeOutcome<Paradigm, ArrayType, EApparatusStatus::InvalidState>(ArrayType());
+		}
+		return Info->template GetTraitsPtrs<Paradigm, AllocatorT>(TraitType);
+	}
+
+	/**
+	 * Get a list of trait pointers.
+	 * Mutable data version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam T The type of traits to get.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @return The resulting list of traits.
+	 */
+	template < EParadigm Paradigm,
+			   typename  T,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	TOutcome<Paradigm, TArray<TTraitPtrResult<Paradigm, T>, AllocatorT>>
+	GetTraitsPtrs() const
+	{
+		using ArrayType = TArray<TTraitPtrResult<Paradigm, T>, AllocatorT>;
+		const auto Info = FindInfo();
+		if (AvoidCondition(Paradigm, Info == nullptr))
+		{
+			return MakeOutcome<Paradigm, ArrayType, EApparatusStatus::InvalidState>(ArrayType());
+		}
+		return Info->template GetTraitsPtrs<Paradigm, T, AllocatorT>();
+	}
+
+	/**
+	 * Get a list of trait pointers.
+	 * Mutable data default paradigm version.
+	 *
+	 * Respects the inheritance.
+	 *
+	 * @tparam T The type of traits to get.
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator used in the results receiver.
+	 * @return The resulting list of traits.
+	 */
+	template < typename  T,
+			   EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TTraitPtrResultSecurity<Paradigm, T> = true >
+	FORCEINLINE TOutcome<Paradigm, TArray<TTraitPtrResult<Paradigm, T>, AllocatorT>>
+	GetTraitsPtrs() const
+	{
+		return GetTraitsPtrs<Paradigm, T, AllocatorT>();
+	}
+
+	/// @}
+#pragma endregion Multi-Trait Data Access
 
 	/// @}
 #pragma endregion Traits Data Access
@@ -2089,20 +2274,21 @@ struct TSubjectHandle
 
 	/**
 	 * Obtain a trait pointer from the subject.
-	 * Statically typed pointer version.
+	 * Statically typed pointer default paradigm version.
 	 *
 	 * If the trait is not currently within the subject,
 	 * it gets created anew and a pointer to it is returned.
 	 *
 	 * @tparam T The type of the trait to obtain.
+	 * @tparam Paradigm The security paradigm to use.
 	 * @return The pointer to the trait of
 	 * the specified type.
 	 */
-	template < typename T >
+	template < typename T, EParadigm Paradigm = EParadigm::Default >
 	FORCEINLINE auto
 	ObtainTraitPtr() const
 	{
-		return ObtainTraitPtr<EParadigm::Default, T>();
+		return ObtainTraitPtr<Paradigm, T>();
 	}
 
 	/**
@@ -2132,19 +2318,21 @@ struct TSubjectHandle
 
 	/**
 	 * Obtain a trait reference from the subject.
-	 * Templated reference version.
+	 * Templated reference default paradigm version.
 	 * 
 	 * If the trait is not currently within the subject,
 	 * it gets created anew and its reference is returned.
 	 *
 	 * @tparam T The type of the trait to obtain.
+	 * @tparam Paradigm The security paradigm to use.
 	 * @return A reference to the trait.
 	 */
-	template < typename T >
-	FORCEINLINE auto
+	template < typename T,  EParadigm Paradigm = EParadigm::Default,
+			   more::enable_if_t<(AllowsStructuralChanges && AllowsDirectTraitAccess) || IsUnsafe(Paradigm), bool> = true >
+	FORCEINLINE TOutcome<Paradigm, TTraitRefResult<Paradigm, T>>
 	ObtainTraitRef() const
 	{
-		return ObtainTraitRef<EParadigm::Default, T>();
+		return ObtainTraitRef<Paradigm, T>();
 	}
 
 	/**

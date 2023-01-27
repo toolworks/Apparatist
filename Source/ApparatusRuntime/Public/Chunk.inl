@@ -30,7 +30,7 @@ UChunk::Initialize(const int32       InId,
 
 	Traitmark.Set(InTraitmark);
 
-	const int32 LinesCount = Traitmark.TraitsNum();
+	const auto LinesCount = Traitmark.TraitsNum();
 	Slots.Reserve(Capacity);
 	TraitsTemp = (void**)Apparatus_MallocArray(LinesCount, sizeof(*TraitsTemp));
 
@@ -42,6 +42,29 @@ UChunk::Initialize(const int32       InId,
 		Lines.Add(FScriptStructArray(TraitType, Capacity));
 		TraitsTemp[li] = FMemory::Malloc(TraitType->GetStructureSize());
 		TraitType->InitializeStruct(TraitsTemp[li]);
+
+		// Calculate the cached lines indices...
+		for (auto Parent = TraitType; Parent != nullptr; Parent = Cast<UScriptStruct>(Parent->GetSuperStruct()))
+		{
+			auto& LinesCache = ChildLinesCache.FindOrAdd(Parent);
+			for (int32 ti = 0; ti < LinesCount; ++ti)
+			{
+				if (Traitmark[ti]->IsChildOf(Parent))
+				{
+					if ((Traitmark[ti] == Parent)
+					 && ((LinesCache.Num() == 0) ||
+						 (LinesCache[0] != ti)))
+					{
+						// Exact matches must always be the first ones:
+						InsertSwap(LinesCache, ti, 0);
+					}
+					else
+					{
+						LinesCache.AddUnique(ti);
+					}
+				}
+			}
+		}
 	}
 
 	return EApparatusStatus::Success;
@@ -237,19 +260,20 @@ UChunk::DoUnlock(const bool bWasSolid) const
 }
 
 // TODO: Insecure method. Refactor.
+template < typename AllocatorT/*=FDefaultAllocator*/ >
 inline EApparatusStatus
-UChunk::FetchTraitsPtrs(const int32          SubjectIndex,
-						const TArray<int32>& Mapping,
-						void**               OutTraits)
+UChunk::FetchTraitsPtrs(const int32                      SubjectIndex,
+						const TArray<int32, AllocatorT>& TraitLinesIndices,
+						void**                           OutTraits)
 {
-	check(SubjectIndex > FSubjectInfo::InvalidSlotIndex);
+	check(SubjectIndex != FSubjectInfo::InvalidSlotIndex);
 	check(SubjectIndex < Slots.Num());
-	check(Mapping.Num() <= TraitLinesNum());
+	check(TraitLinesIndices.Num() <= TraitLinesNum());
 
-	for (int32 i = 0; i < Mapping.Num(); ++i) 
+	for (int32 i = 0; i < TraitLinesIndices.Num(); ++i) 
 	{
-		const int32 TraitIndex = Mapping[i];
-		OutTraits[i] = TraitPtrAt(SubjectIndex, TraitIndex);
+		const auto TraitLineIndex = TraitLinesIndices[i];
+		OutTraits[i] = TraitPtrAt(SubjectIndex, TraitLineIndex);
 	}
 
 	return EApparatusStatus::Success;

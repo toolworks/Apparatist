@@ -20,8 +20,8 @@
 #include "Detail.h"
 
 
-
-FBeltSlotCache& FBeltSlotCache::operator=(const FBeltSlotCache& Cache)
+FBeltSlotCache&
+FBeltSlotCache::operator=(const FBeltSlotCache& Cache)
 {
 	if (!IsLocked())
 	{
@@ -29,7 +29,7 @@ FBeltSlotCache& FBeltSlotCache::operator=(const FBeltSlotCache& Cache)
 	}
 	for (auto Detail : Cache.Details)
 	{
-		if (UNLIKELY(!Detail.IsValid())) continue;
+		check(Detail != nullptr);
 		if (!Detail->IsEnabled()) continue;
 		if (UNLIKELY(IsLocked() &&
 					 (Details.Find(Detail) != INDEX_NONE)))
@@ -41,11 +41,12 @@ FBeltSlotCache& FBeltSlotCache::operator=(const FBeltSlotCache& Cache)
 	return *this;
 }
 
-FBeltSlotCache& FBeltSlotCache::operator+=(const FBeltSlotCache& Cache)
+FBeltSlotCache&
+FBeltSlotCache::operator+=(const FBeltSlotCache& Cache)
 {
 	for (auto Detail : Cache.Details)
 	{
-		if (UNLIKELY(!Detail.IsValid())) continue;
+		check(Detail != nullptr);
 		if (!Detail->IsEnabled()) continue;
 		if (UNLIKELY(Details.Find(Detail) != INDEX_NONE))
 		{

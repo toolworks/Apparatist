@@ -20,6 +20,8 @@
 #include "Machine.h"
 
 
+UChunk::ChildLinesCacheEntryType UChunk::EmptyChildLinesEntry;
+
 void
 UChunk::BeginDestroy()
 {

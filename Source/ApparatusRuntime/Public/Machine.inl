@@ -15,53 +15,6 @@
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 
-#pragma region Detail Registration
-
-FORCEINLINE FDetailInfo&
-UMachine::DoObtainDetailInfo(const TSubclassOf<UDetail> DetailClass)
-{
-	checkf(DetailClass, TEXT("The detail class must be provided to get the info about."));
-
-	FDetailInfo* InfoPtr = Details.Find(DetailClass);
-
-	if (LIKELY(InfoPtr != nullptr))
-	{
-		return *InfoPtr;
-	}
-
-	// A static is used here, cause the id has to be consistently
-	// incremented for correctly quering the base class infos in the constructor...
-	static int32 DetailId = FDetailInfo::FirstId;
-
-	return Details.Add(DetailClass, FDetailInfo(DetailClass, DetailId++));
-}
-
-FORCEINLINE int32
-UMachine::DoObtainDetailId(const TSubclassOf<UDetail> DetailClass)
-{
-	checkf(DetailClass, TEXT("The detail class must be provided to get the id of."));
-
-	return DoObtainDetailInfo(DetailClass).Id;
-}
-
-FORCEINLINE const FBitMask&
-UMachine::DoObtainDetailMask(const TSubclassOf<UDetail> DetailClass)
-{
-	checkf(DetailClass, TEXT("The detail class must be provided to get the mask for."));
-
-	return DoObtainDetailInfo(DetailClass).Mask;
-}
-
-FORCEINLINE const FBitMask&
-UMachine::DoObtainExcludedDetailMask(const TSubclassOf<UDetail> DetailClass)
-{
-	checkf(DetailClass, TEXT("The detail class must be provided to get the excluded mask for."));
-
-	return DoObtainDetailInfo(DetailClass).ExcludedMask;
-}
-
-#pragma endregion Detail Registration
-
 #include "SubjectHandle.h"
 
 template < EParadigm Paradigm/*=EParadigm::DefaultInternal*/ >

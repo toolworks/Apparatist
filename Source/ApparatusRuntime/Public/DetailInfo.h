@@ -46,18 +46,20 @@ struct APPARATUSRUNTIME_API FDetailInfo
 
   public:
 
-	enum
-	{
-		/**
-		 * Invalid detail identifier.
-		 */
-		InvalidId = -1,
+	/**
+	 * The type of the detail identifier.
+	 */
+	using IdType = int32;
 
-		/**
-		 * First valid detail identifier.
-		 */
-		FirstId = 0,
-	};
+	/**
+	 * Invalid detail identifier.
+	 */
+	static constexpr IdType InvalidId = -1;
+
+	/**
+	 * First detail identifier.
+	 */
+	static constexpr IdType FirstId = 0;
 
   private:
 
@@ -88,7 +90,7 @@ struct APPARATUSRUNTIME_API FDetailInfo
 	 *
 	 * Matches its index within the global machine's array.
 	 */
-	int32 Id = InvalidId;
+	IdType Id = InvalidId;
 
 	/**
 	 * The bitmask of the detail.
@@ -98,7 +100,7 @@ struct APPARATUSRUNTIME_API FDetailInfo
 	/**
 	 * The excluded bitmask of the detail.
 	 */
-	FBitMask ExcludedMask;
+	FBitMask ExcludingMask;
 
 	/**
 	 * Construct a stale detail information struct.
@@ -110,5 +112,6 @@ struct APPARATUSRUNTIME_API FDetailInfo
 	/**
 	 * Construct a new detail information struct.
 	 */
-	FDetailInfo(const TSubclassOf<UDetail> InClass, const int32 InId);
+	FDetailInfo(const TSubclassOf<UDetail> InClass,
+				const IdType               InId);
 }; //-struct FDetailInfo

@@ -45,6 +45,7 @@
 template < typename ...Ts >
 struct TFingerprint;
 struct FFilter;
+struct FChunkSlot;
 
 /**
  * The traits/details fingerprint.
@@ -128,6 +129,7 @@ struct APPARATUSRUNTIME_API FFingerprint
 	friend class UChunk;
 	friend struct FSubjectHandle;
 	friend struct FFilter;
+	friend struct FChunkSlot;
 
   public:
 

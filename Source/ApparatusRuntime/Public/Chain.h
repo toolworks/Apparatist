@@ -932,11 +932,123 @@ struct TChain final
 			return GetTraitPtr<Paradigm, T>();
 		}
 
+#pragma region Multi-Trait Getting
+		/// @name Multi-Trait Getting
+		/// @{
+
+		/**
+		 * Get a list of traits at the current cursor position.
+		 * Dynamically-typed immutable data version.
+		 * 
+		 * Respects the inheritance model.
+		 * 
+		 * @tparam Paradigm The security paradigm to use.
+		 * @tparam AllocatorT The type of the array allocator.
+		 * @param[in] TraitType The type of the trait to get.
+		 * @param[out] OutTraits The results receiver.
+		 * @return The outcome of the operation.
+		 */
+		template < EParadigm Paradigm   = DefaultParadigm,
+				   typename  AllocatorT = FDefaultAllocator,
+				   TTraitVoidPtrResultSecurity<Paradigm> = true >
+		FORCEINLINE TOutcome<Paradigm>
+		GetTraitsPtrs(UScriptStruct* const             TraitType,
+					  TArray<const void*, AllocatorT>& OutTraits) const
+		{
+			checkf(Owner, TEXT("The cursor must have an owner in order to get pointers to immutable traits. "
+							   "Has it already done its iterating and released the chain?"));
+
+			switch (Iterator.GetIndex())
+			{
+				case ChunkItIndex: return Iterator.template Get<ChunkItType>()
+					.template GetTraitsPtrs<Paradigm>(TraitType, OutTraits);
+				case BeltItIndex: return Iterator.template Get<BeltItType>()
+					.template GetTraitsPtrs<Paradigm>(TraitType, OutTraits);
+				default: 
+				{
+					checkNoEntry();
+					return nullptr;
+				}
+			}
+		}
+
+		/**
+		 * Get a list of traits at the current cursor position.
+		 * Dynamically-typed mutable data version.
+		 * 
+		 * Respects the inheritance model.
+		 * 
+		 * @tparam Paradigm The security paradigm to use.
+		 * @tparam AllocatorT The type of the array allocator.
+		 * @param[in] TraitType The type of the trait to get.
+		 * @param[out] OutTraits The results receiver.
+		 * @return The outcome of the operation.
+		 */
+		template < EParadigm Paradigm   = DefaultParadigm,
+				   typename  AllocatorT = FDefaultAllocator,
+				   TTraitVoidPtrResultSecurity<Paradigm> = true >
+		FORCEINLINE TOutcome<Paradigm>
+		GetTraitsPtrs(UScriptStruct* const       TraitType,
+					  TArray<void*, AllocatorT>& OutTraits) const
+		{
+			checkf(Owner, TEXT("The cursor must have an owner in order to get pointers to mutable traits. "
+							   "Has it already done its iterating and released the chain?"));
+
+			switch (Iterator.GetIndex())
+			{
+				case ChunkItIndex: return Iterator.template Get<ChunkItType>()
+					.template GetTraitsPtrs<Paradigm>(TraitType, OutTraits);
+				case BeltItIndex: return Iterator.template Get<BeltItType>()
+					.template GetTraitsPtrs<Paradigm>(TraitType, OutTraits);
+				default: 
+				{
+					checkNoEntry();
+					return nullptr;
+				}
+			}
+		}
+
+		/**
+		 * Get a list of trait pointers.
+		 * Statically-typed version.
+		 * 
+		 * Respects the inheritance model.
+		 * 
+		 * @tparam Paradigm The security paradigm to use.
+		 * @tparam T The type of traits to get. May include a @c const specifier.
+		 * @tparam AllocatorT The type of the traits array allocator.
+		 * @return A pointer to the trait of the designated type.
+		 */
+		template < EParadigm Paradigm = DefaultParadigm,
+				   typename T = void, typename AllocatorT = FDefaultAllocator,
+				   TTraitPtrResultSecurity<Paradigm, T> = true >
+		FORCEINLINE TOutcome<Paradigm>
+		GetTraitsPtrs(TArray<T*, AllocatorT>& OutTraits) const
+		{
+			checkf(Owner, TEXT("The cursor must have an owner in order to get trait pointers. "
+							   "Has it already done its iterating and released the chain?"));
+			switch (Iterator.GetIndex())
+			{
+				case ChunkItIndex: return Iterator.template Get<ChunkItType>()
+					.template GetTraitsPtrs<Paradigm>(OutTraits);
+				case BeltItIndex: return Iterator.template Get<BeltItType>()
+					.template GetTraitsPtrs<Paradigm>(OutTraits);
+				default: 
+				{
+					checkNoEntry();
+					return nullptr;
+				}
+			}
+		}
+
+		/// @}
+#pragma endregion Multi-Trait Getting
+
 		/**
 		 * Get a trait reference of a certain type.
 		 */
 		template < EParadigm Paradigm, typename T,
-				   more::enable_if_t<IsUnsafe(Paradigm) || AllowsDirectTraitAccess, int> = 0 >
+				   TTraitRefResultSecurity<Paradigm, T> = true >
 		FORCEINLINE TOutcome<Paradigm, TTraitRefResult<Paradigm, T>>
 		GetTraitRef() const
 		{
@@ -966,7 +1078,7 @@ struct TChain final
 		 * Get a trait reference of a certain type.
 		 */
 		template < typename T, EParadigm Paradigm = DefaultParadigm,
-				   more::enable_if_t<IsUnsafe(Paradigm) || AllowsDirectTraitAccess, int> = 0 >
+				   more::enable_if_t<IsUnsafe(Paradigm) || AllowsDirectTraitAccess, bool> = true >
 		FORCEINLINE TOutcome<Paradigm, TTraitRefResult<Paradigm, T>>
 		GetTraitRef() const
 		{
@@ -1075,7 +1187,6 @@ struct TChain final
 				}
 			}
 		}
-
 
 		/**
 		 * Get a trait of a certain type. Templated version.
@@ -1511,6 +1622,41 @@ struct TChain final
 		}
 
 		/**
+		 * Get details of a certain class.
+		 * 
+		 * Respects the inheritance.
+		 * 
+		 * @tparam Paradigm The paradigm to work under.
+		 * @tparam AllocatorT The type of the details array allocator.
+		 * @param DetailClass The class of detail to get. May be a base class.
+		 * @param OutDetails The array of details.
+		 * @return The outcome of the operation.
+		 */
+		template < EParadigm Paradigm   = DefaultParadigm,
+				   typename  AllocatorT = FDefaultAllocator,
+				   TDetailPtrResultSecurity<UDetail> = 0 >
+		FORCEINLINE TOutcome<Paradigm>
+		GetDetails(const TSubclassOf<UDetail>    DetailClass,
+				   TArray<UDetail*, AllocatorT>& OutDetails) const
+		{
+			checkf(Owner, TEXT("The cursor must have an owner in order to get details. "
+							   "Has it already done its iterating and released the chain?"));
+			switch (Iterator.GetIndex())
+			{
+				case ChunkItIndex: return Iterator.template Get<ChunkItType>()
+					.template GetDetails<Paradigm>(DetailClass, OutDetails);
+				case BeltItIndex: return Iterator.template Get<BeltItType>()
+					.template GetDetails<Paradigm>(DetailClass, OutDetails);
+				default:
+				{
+					checkf(false, TEXT("Invalid cursor state to get a detail from."));
+					OutDetails.Reset();
+					return MakeOutcome<Paradigm>(EApparatusStatus::InvalidState);
+				}
+			}
+		}
+
+		/**
 		 * Get a detail of a certain class.
 		 * Statically typed version.
 		 * 
@@ -1520,7 +1666,7 @@ struct TChain final
 		 * @return nullptr If there is no such detail within the current iteration.
 		 */
 		template < EParadigm Paradigm, class D,
-				   TDetailPtrResultSecurity<D> = 0 >
+				   TDetailPtrResultSecurity<D> = true >
 		FORCEINLINE TOutcome<Paradigm, TDetailPtrResult<D>>
 		GetDetail() const
 		{
@@ -1545,6 +1691,62 @@ struct TChain final
 		}
 
 		/**
+		 * Get all details of a certain class.
+		 * Statically typed version.
+		 * 
+		 * Inheritance is respected.
+		 * 
+		 * @tparam Paradigm The paradigm to work under.
+		 * @tparam D The class of detail to get. May be a base class.
+		 * @tparam AllocatorT The type of the details array allocator.
+		 * @return A pointer to the detail of the specified type.
+		 * @return nullptr If there is no such detail within the current iteration.
+		 */
+		template < EParadigm Paradigm,
+				   class D, typename AllocatorT,
+				   TDetailPtrResultSecurity<D> = true >
+		FORCEINLINE TOutcome<Paradigm>
+		GetDetails(TArray<D*, AllocatorT>& OutDetails) const
+		{
+			checkf(Owner, TEXT("The cursor must have an owner in order to get details. "
+							   "Has it already done its iterating and released the chain?"));
+			switch (Iterator.GetIndex())
+			{
+				case ChunkItIndex: return Iterator.template Get<ChunkItType>()
+					.template GetDetails<Paradigm>(OutDetails);
+				case BeltItIndex: return Iterator.template Get<BeltItType>()
+					.template GetDetails<Paradigm>(OutDetails);
+				default:
+				{
+					checkf(false, TEXT("Invalid cursor state to get details."));
+					OutDetails.Reset();
+					return MakeOutcome<Paradigm>(EApparatusStatus::InvalidState);
+				}
+			}
+		}
+
+		/**
+		 * Get all details of a certain class.
+		 * Statically typed default paradigm version.
+		 * 
+		 * Inheritance is respected.
+		 * 
+		 * @tparam D The class of detail to get. May be a base class.
+		 * @tparam Paradigm The paradigm to work under.
+		 * @tparam AllocatorT The type of the details array allocator.
+		 * @return A pointer to the detail of the specified type.
+		 * @return nullptr If there is no such detail within the current iteration.
+		 */
+		template < class D, EParadigm Paradigm = DefaultParadigm,
+				   typename AllocatorT = FDefaultAllocator,
+				   TDetailPtrResultSecurity<D> = true >
+		FORCEINLINE TOutcome<Paradigm>
+		GetDetails(TArray<D*, AllocatorT>& OutDetails) const
+		{
+			return GetDetails<Paradigm>(OutDetails);
+		}
+
+		/**
 		 * Get a detail of a certain class.
 		 * Statically typed default paradigm version.
 		 * 
@@ -1554,7 +1756,7 @@ struct TChain final
 		 * @return nullptr If there is no such detail within the current iteration.
 		 */
 		template < class D, EParadigm Paradigm = DefaultParadigm,
-				   TDetailPtrResultSecurity<D> = 0 >
+				   TDetailPtrResultSecurity<D> = true >
 		FORCEINLINE TOutcome<Paradigm, TDetailPtrResult<D>>
 		GetDetail() const
 		{
@@ -1591,18 +1793,7 @@ struct TChain final
 
 	  private:
 
-#pragma region Part Switching
-
-		enum EPartType
-		{
-			PT_Other = 0,
-			PT_Flagmark,
-			PT_Trait,
-			PT_Detail,
-			PT_SubjectHandle,
-			PT_Subjective,
-			PT_Cursor
-		};
+#pragma region Part Detection
 
 		enum EPartDeliveryType
 		{
@@ -1640,111 +1831,117 @@ struct TChain final
 			static constexpr enum EPartDeliveryType Value = PDT_Pointer;
 		};
 
-		template< class P,
-				  bool IsFlagmark      = ::IsFlagmarkType     <typename more::flatten<P>::type>(),
-				  bool IsTrait         = ::IsTraitType        <typename more::flatten<P>::type>(),
-				  bool IsDetail        = ::IsDetailClass      <typename more::flatten<P>::type>(),
-				  bool IsSubjectHandle = ::IsSubjectHandleType<typename more::flatten<P>::type>(),
-				  bool IsSubjective    = ::IsSubjectiveClass  <typename more::flatten<P>::type>(),
-				  bool IsCursor        = ::IsChainCursorType  <typename more::flatten<P>::type>() >
-		struct TPartSwitcher
-		{ static constexpr enum EPartType Value = PT_Other; };
+		enum EPartType
+		{
+			PT_Other = 0,
+			PT_Flagmark,
+			PT_Trait,
+			PT_Detail,
+			PT_SubjectHandle,
+			PT_Subjective,
+			PT_Cursor,
+			PT_Array
+		};
 
 		template< class P >
-		struct TPartSwitcher<P, true, false, false, false, false, false>
-		{ static constexpr enum EPartType Value = PT_Flagmark; };
+		struct TPartTypeDetector
+		{
+			using FlatPartType = more::flatten_t<P>;
+			static constexpr enum EPartType Value = 
+				::IsFlagmarkType     <FlatPartType>() ? PT_Flagmark :
+				::IsTraitType        <FlatPartType>() ? PT_Trait :
+				::IsDetailClass      <FlatPartType>() ? PT_Detail :
+				::IsSubjectHandleType<FlatPartType>() ? PT_SubjectHandle :
+				::IsSubjectiveClass  <FlatPartType>() ? PT_Subjective :
+				::IsChainCursorType  <FlatPartType>() ? PT_Cursor :
+				::IsArrayType        <FlatPartType>() ? PT_Array :
+				// Add new part types here...
+				PT_Other;
+		};
 
-		template< class P >
-		struct TPartSwitcher<P, false, true, false, false, false, false>
-		{ static constexpr enum EPartType Value = PT_Trait; };
-
-		template< class P >
-		struct TPartSwitcher<P, false, false, true, false, false, false>
-		{ static constexpr enum EPartType Value = PT_Detail; };
-
-		template< class P >
-		struct TPartSwitcher<P, false, false, false, true, false, false>
-		{ static constexpr enum EPartType Value = PT_SubjectHandle; };
-
-		template< class P >
-		struct TPartSwitcher<P, false, false, false, false, true, false>
-		{ static constexpr enum EPartType Value = PT_Subjective; };
-
-		template< class P >
-		struct TPartSwitcher<P, false, false, false, false, false, true>
-		{ static constexpr enum EPartType Value = PT_Cursor; };
-
-		template< EPartType Part, bool Defer = true >
+		template< EPartType Part, bool bDefer = true >
 		struct TStaticSignaler
 		{
 			static constexpr bool Do()
 			{
-				static_assert(!Defer, "Unknown/other part type detected.");
+				static_assert(!bDefer, "Unknown/other part type detected.");
 				return true;
 			}
 		};
 
-		template< bool Defer >
-		struct TStaticSignaler<EPartType::PT_Cursor, Defer>
+		template< bool bDefer >
+		struct TStaticSignaler<EPartType::PT_Cursor, bDefer>
 		{
 			static constexpr bool Do()
 			{
-				static_assert(!Defer, "Cursor part was detected.");
+				static_assert(!bDefer, "Cursor part was detected.");
 				return true;
 			}
 		};
 
-		template< bool Defer >
-		struct TStaticSignaler<EPartType::PT_Flagmark, Defer>
+		template< bool bDefer >
+		struct TStaticSignaler<EPartType::PT_Flagmark, bDefer>
 		{
 			static constexpr bool Do()
 			{
-				static_assert(!Defer, "Flagmark part was detected.");
+				static_assert(!bDefer, "Flagmark part was detected.");
 				return true;
 			}
 		};
 
-		template< bool Defer >
-		struct TStaticSignaler<EPartType::PT_Trait, Defer>
+		template< bool bDefer >
+		struct TStaticSignaler<EPartType::PT_Trait, bDefer>
 		{
 			static constexpr bool Do()
 			{
-				static_assert(!Defer, "Trait part was detected.");
+				static_assert(!bDefer, "Trait part was detected.");
 				return true;
 			}
 		};
 
-		template< bool Defer >
-		struct TStaticSignaler<EPartType::PT_Detail, Defer>
+		template< bool bDefer >
+		struct TStaticSignaler<EPartType::PT_Detail, bDefer>
 		{
 			static constexpr bool Do()
 			{
-				static_assert(!Defer, "Detail part was detected.");
+				static_assert(!bDefer, "Detail part was detected.");
 				return true;
 			}
 		};
 
-		template< bool Defer >
-		struct TStaticSignaler<EPartType::PT_SubjectHandle, Defer>
+		template< bool bDefer >
+		struct TStaticSignaler<EPartType::PT_SubjectHandle, bDefer>
 		{
 			static constexpr bool Do()
 			{
-				static_assert(!Defer, "Subject handle part was detected.");
+				static_assert(!bDefer, "Subject handle part was detected.");
 				return true;
 			}
 		};
 
-		template< bool Defer >
-		struct TStaticSignaler<EPartType::PT_Subjective, Defer>
+		template< bool bDefer >
+		struct TStaticSignaler<EPartType::PT_Subjective, bDefer>
 		{
 			static constexpr bool Do()
 			{
-				static_assert(!Defer, "Subjective part was detected.");
+				static_assert(!bDefer, "Subjective part was detected.");
 				return true;
 			}
 		};
 
-#pragma endregion Part Switching
+		template< bool bDefer >
+		struct TStaticSignaler<EPartType::PT_Array, bDefer>
+		{
+			static constexpr bool Do()
+			{
+				static_assert(!bDefer, "Array part was detected.");
+				return true;
+			}
+		};
+
+#pragma endregion Part Detection
+
+#pragma region Parts Getting
 
 		/**
 		 * Generic subject part getter.
@@ -1760,7 +1957,7 @@ struct TChain final
 		 * don't want static asserts, pass false here.
 		 */
 		template < class                  P,
-				   enum EPartType         InPart            = TPartSwitcher<P>::Value,
+				   enum EPartType         InPart            = TPartTypeDetector<P>::Value,
 				   enum EPartDeliveryType InDelivery        = TPartDeliverySwitcher<P>::Value,
 				   bool                   ArgumentTypeCheck = true >
 		struct TPartGetter
@@ -1776,7 +1973,7 @@ struct TChain final
 		 * The common part getting functionality.
 		 */
 		template < class                  P,
-				   enum EPartType         InPart     = TPartSwitcher<P>::Value,
+				   enum EPartType         InPart     = TPartTypeDetector<P>::Value,
 				   enum EPartDeliveryType InDelivery = TPartDeliverySwitcher<P>::Value >
 		struct TCommonPartGetter
 		{
@@ -2429,6 +2626,81 @@ struct TChain final
 		};
 
 #pragma endregion Mechanism Getting
+
+#pragma region Array Getting
+
+		template < typename ElementT, typename AllocatorT, bool ArgumentTypeCheck >
+		struct TPartGetter<TArray<ElementT, AllocatorT>, PT_Array, PDT_Value, ArgumentTypeCheck>
+		  : public TCommonPartGetter<TArray<ElementT, AllocatorT>, PT_Array, PDT_Value>
+		{
+			using ArrayType = TArray<ElementT, AllocatorT>;
+			using Super = TCommonPartGetter<ArrayType, PT_Array, PDT_Value>;
+
+			template < EPartType PartType = TPartTypeDetector<ElementT>::Value, bool bDefer = true >
+			struct TElementResolver
+			{
+				static_assert(!bDefer, "Only details and traits can be gathered in an array.");
+			};
+
+			template < >
+			struct TElementResolver<PT_Trait, true>
+			{
+				static FORCEINLINE ArrayType
+				Get(const TCursor& InCursor)
+				{
+					ArrayType Array;
+					InCursor.GetTraitsPtrs(Array);
+					return MoveTempIfPossible(Array);
+				}
+
+				static FORCEINLINE ArrayType
+				GetHinted(const TCursor& InCursor,
+						  const int32)
+				{
+					ArrayType Array;
+					InCursor.GetTraitsPtrs(Array);
+					return MoveTempIfPossible(Array);
+				}
+			};
+
+			template < >
+			struct TElementResolver<PT_Detail, true>
+			{
+				static FORCEINLINE ArrayType
+				Get(const TCursor& InCursor)
+				{
+					ArrayType Array;
+					InCursor.GetDetails(Array);
+					return MoveTempIfPossible(Array);
+				}
+
+				static FORCEINLINE ArrayType
+				GetHinted(const TCursor& InCursor,
+						  const int32)
+				{
+					ArrayType Array;
+					InCursor.GetDetails(Array);
+					return MoveTempIfPossible(Array);
+				}
+			};
+
+			static FORCEINLINE ArrayType
+			Get(const TCursor& InCursor)
+			{
+				return TElementResolver<>::template Get(InCursor);
+			}
+
+			static FORCEINLINE ArrayType
+			GetHinted(const TCursor& InCursor,
+					  const int32    InTraitLine)
+			{
+				return TElementResolver<>::template GetHinted(InCursor, InTraitLine);
+			}
+		};
+
+#pragma endregion Array Getting
+
+#pragma endregion Parts Getting
 
 	  public:
 

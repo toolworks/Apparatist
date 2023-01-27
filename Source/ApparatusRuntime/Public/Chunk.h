@@ -23,6 +23,8 @@
 #include "HAL/UnrealMemory.h"
 #include "UObject/Class.h"
 
+#include "More/Containers/Array.h"
+
 #ifndef SKIP_MACHINE_H
 #define SKIP_MACHINE_H
 #define CHUNK_H_SKIPPED_MACHINE_H
@@ -63,6 +65,26 @@ class APPARATUSRUNTIME_API UChunk
 
   public:
 
+	/**
+	 * The type of the slot index.
+	 */
+	using SlotIndexType = FSubjectInfo::SlotIndexType;
+
+	/**
+	 * The type of the trait line indices.
+	 */
+	using TraitLineIndexType = int32;
+
+	/**
+	 * Invalid trait line index.
+	 */
+	static constexpr TraitLineIndexType InvalidTraitLineIndex = INDEX_NONE;
+
+	/**
+	 * Invalid subject index.
+	 */
+	static constexpr auto InvalidSlotIndex = FSubjectInfo::InvalidSlotIndex;
+
 	enum
 	{
 		/**
@@ -73,17 +95,7 @@ class APPARATUSRUNTIME_API UChunk
 		/**
 		 * First valid chunk identifier.
 		 */
-		FirstId = 1,
-
-		/**
-		 * Invalid trait line index.
-		 */
-		InvalidTraitLineIndex = -1,
-
-		/**
-		 * Invalid subject index.
-		 */
-		InvalidSlotIndex = FSubjectInfo::InvalidSlotIndex,
+		FirstId = 1
 	};
 
   private:
@@ -131,6 +143,27 @@ class APPARATUSRUNTIME_API UChunk
 	 * The adjectives of the chunk.
 	 */
 	TArray<FChunkAdjectiveEntry> Adjectives;
+
+	/**
+	 * The child lines cache entry type.
+	 */
+	using ChildLinesCacheEntryType = TArray<TraitLineIndexType, TInlineAllocator<4>>;
+
+	/**
+	 * A static empty entry to return.
+	 */
+	static ChildLinesCacheEntryType EmptyChildLinesEntry;
+
+	/**
+	 * The child lines caching dictionary type.
+	 */
+	using ChildLinesCacheType = TMap<const UScriptStruct* const, ChildLinesCacheEntryType,
+									 TSetAllocator<typename FDefaultSetAllocator::SparseArrayAllocator, TInlineAllocator<8>>>;
+
+	/**
+	 * The cached mappings to trait line child types.
+	 */
+	mutable ChildLinesCacheType ChildLinesCache;
 
 	/**
 	 * An array used to store a subject's traits
@@ -602,7 +635,7 @@ class APPARATUSRUNTIME_API UChunk
 	FORCEINLINE UScriptStruct*
 	TraitLineTypeAt(const int32 LineIndex) const
 	{
-		check(LineIndex > InvalidTraitLineIndex);
+		check(LineIndex != InvalidTraitLineIndex);
 		return Traitmark.TraitAt(LineIndex);
 	}
 
@@ -635,11 +668,126 @@ class APPARATUSRUNTIME_API UChunk
 	 * @param TraitType The type of the trait to get by.
 	 * @return The trait line of the specified type.
 	 */
+	FORCEINLINE TraitLineIndexType
+	TraitLineIndexOf(const UScriptStruct* const TraitType) const
+	{
+		const auto& LinesCache = TraitLinesIndicesOf(TraitType);
+		if (UNLIKELY(LinesCache.Num() == 0))
+		{
+			return InvalidTraitLineIndex;
+		}
+		return LinesCache[0];
+	}
+
+	/**
+	 * Get a line index of a trait equal or derived from a trait type.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * Safely returns @c INDEX_NONE for non-trait types.
+	 * 
+	 * @tparam T The type of the trait to get by.
+	 * @return The trait line index of the specified type.
+	 */
+	template < typename T,
+			   TTraitTypeSecurity<T> = true >
+	FORCEINLINE int32
+	TraitLineIndexOf() const
+	{
+		return TraitLineIndexOf(T::StaticStruct());
+	}
+
+#ifndef DOXYGEN_ONLY
+
+	/**
+	 * Get a line index of a trait equal or derived from a trait type.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * Safely returns @c INDEX_NONE for non-trait types.
+	 * 
+	 * @tparam T The type of the trait to get by.
+	 * @return The trait line index of the specified type.
+	 */
+	template < typename T,
+			   TNonTraitTypeSecurity<T> = true >
+	constexpr FORCEINLINE int32
+	TraitLineIndexOf() const
+	{
+		return INDEX_NONE;
+	}
+
+#endif // DOXYGEN_ONLY
+
+	/**
+	 * Get line indices of the traits equal or derived from a trait type.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * @param TraitType The type of the trait to get by.
+	 * @return The trait lines of the specified type.
+	 */
+	FORCEINLINE const ChildLinesCacheEntryType& 
+	TraitLinesIndicesOf(const UScriptStruct* const TraitType) const
+	{
+		check(TraitType != nullptr);
+		const auto LinesPtr = ChildLinesCache.Find(TraitType);
+		if (UNLIKELY(LinesPtr == nullptr))
+		{
+			return EmptyChildLinesEntry;
+		}
+		return *LinesPtr;
+	}
+
+	/**
+	 * Get line indices of the traits equal or derived from a trait type.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * Safely returns an empty array for non-trait types.
+	 * 
+	 * @tparam T The type of the trait to get by.
+	 * @return The trait lines of the specified type.
+	 */
+	template < typename T,
+			   TTraitTypeSecurity<T> = true >
+	FORCEINLINE const ChildLinesCacheEntryType& 
+	TraitLinesIndicesOf() const
+	{
+		return TraitLinesIndicesOf(T::StaticStruct());
+	}
+
+#ifndef DOXYGEN_ONLY
+
+	/**
+	 * Get line indices of the traits equal or derived from a trait type.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * @tparam T The type of the trait to get by.
+	 * @return The trait lines of the specified type.
+	 */
+	template < typename T,
+			   TNonTraitTypeSecurity<T> = true >
+	FORCEINLINE const ChildLinesCacheEntryType& 
+	TraitLinesIndicesOf() const
+	{
+		static ChildLinesCacheEntryType EmptyCache;
+		return EmptyChildLinesEntry;
+	}
+
+#endif // DOXYGEN_ONLY
+
+	/**
+	 * Get a trait line by the type of its element.
+	 * 
+	 * @param TraitType The type of the trait to get by.
+	 * @return The trait line of the specified type.
+	 */
 	FORCEINLINE const FScriptStructArray& 
 	GetTraitLine(UScriptStruct* const TraitType) const
 	{
-		const auto LineIndex = Traitmark.IndexOf(TraitType);
-		return TraitLineAt(LineIndex);
+		return TraitLineAt(TraitLineIndexOf(TraitType));
 	}
 
 	/**
@@ -664,7 +812,7 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return The trait line at the specified index.
 	 */
 	FORCEINLINE const FScriptStructArray& 
-	TraitLineAt(const int32 LineIndex) const
+	TraitLineAt(const TraitLineIndexType LineIndex) const
 	{
 		check(LineIndex > InvalidTraitLineIndex);
 		return Lines[LineIndex];
@@ -677,7 +825,7 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return The trait line at the specified index.
 	 */
 	FORCEINLINE FScriptStructArray& 
-	TraitLineAt(const int32 LineIndex)
+	TraitLineAt(const TraitLineIndexType LineIndex)
 	{
 		check(LineIndex > InvalidTraitLineIndex);
 		return Lines[LineIndex];
@@ -763,36 +911,6 @@ class APPARATUSRUNTIME_API UChunk
 		return FindTraitLine(T::StaticStruct());
 	}
 
-	/**
-	 * Get the trait line index of a trait.
-	 * 
-	 * @param TraitType The type of the trait to find.
-	 * @return The index of the trait, or @c INDEX_NONE, if there
-	 * is no such trait within the chunk.
-	 */
-	FORCEINLINE int32
-	TraitLineIndexOf(UScriptStruct* const TraitType) const
-	{
-		return Traitmark.IndexOf(TraitType);
-	}
-
-	/**
-	 * Get the trait line index of a trait.
-	 * 
-	 * @note This method actually supports non-trait types and @c INDEX_NONE
-	 * will be returned in such case.
-	 * 
-	 * @tparam T The type of the trait to find.
-	 * @return The index of the trait, or @c INDEX_NONE, if there
-	 * is no such trait within the chunk.
-	 */
-	template < typename T >
-	FORCEINLINE constexpr int32
-	TraitLineIndexOf() const
-	{
-		return Traitmark.template IndexOf<T>();
-	}
-
 	/// @}
 #pragma endregion Trait Lines
 
@@ -802,7 +920,7 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return The status of the examination.
 	 */
 	FORCEINLINE bool
-	IsSlotLocked(const int32 SlotIndex) const
+	IsSlotLocked(const SlotIndexType SlotIndex) const
 	{
 		check(SlotIndex > InvalidSlotIndex);
 		// We can just use iterable count here, since
@@ -826,8 +944,8 @@ class APPARATUSRUNTIME_API UChunk
 	 */
 	template < typename ChunkItT >
 	FORCEINLINE ChunkItT
-	Begin(const FFilter& Filter,
-		  const int32    Offset = 0)
+	Begin(const FFilter&      Filter,
+		  const SlotIndexType Offset = 0)
 	{
 		if (UNLIKELY((Slots.Num() <= Offset) || 
 					 (IsLocked() && (IterableCount <= Offset))))
@@ -867,10 +985,10 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return The status of the operation.
 	 */
 	FORCEINLINE EApparatusStatus
-	TraitAt(const int32 SlotIndex,
-			const int32 LineIndex,
-			void* const OutTraitData,
-			bool        bTraitDataInitialized = true) const
+	TraitAt(const SlotIndexType      SlotIndex,
+			const TraitLineIndexType LineIndex,
+			void* const              OutTraitData,
+			bool                     bTraitDataInitialized = true) const
 	{
 		check(SlotIndex != InvalidSlotIndex);
 		check(LineIndex != InvalidTraitLineIndex);
@@ -888,8 +1006,8 @@ class APPARATUSRUNTIME_API UChunk
 	 */
 	template < typename T >
 	FORCEINLINE T
-	TraitAt(const int32 SlotIndex,
-			const int32 LineIndex) const
+	TraitAt(const SlotIndexType      SlotIndex,
+			const TraitLineIndexType LineIndex) const
 	{
 		check(SlotIndex != InvalidSlotIndex);
 		check(LineIndex != InvalidTraitLineIndex);
@@ -907,7 +1025,7 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return EApparatusStatus::Missing If there's no such trait type in the chunk.
 	 */
 	EApparatusStatus
-	TraitAt(const int32                SlotIndex,
+	TraitAt(const SlotIndexType        SlotIndex,
 			const UScriptStruct* const TraitType,
 			void* const                OutTraitData,
 			const bool                 bTraitDataInitialized = true) const;
@@ -927,8 +1045,8 @@ class APPARATUSRUNTIME_API UChunk
 	 */
 	template < typename T >
 	FORCEINLINE T
-	TraitAtHinted(const int32 SubjectIndex,
-				  int32       LineIndexHint) const
+	TraitAtHinted(const SlotIndexType SubjectIndex,
+				  TraitLineIndexType  LineIndexHint) const
 	{
 		if (UNLIKELY((LineIndexHint <= InvalidTraitLineIndex) || 
 					 (LineIndexHint >= TraitLinesNum()) ||
@@ -955,9 +1073,9 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return The status of the operation.
 	 */
 	FORCEINLINE EApparatusStatus
-	TraitAtHinted(const int32          SubjectIndex,
+	TraitAtHinted(const SlotIndexType  SubjectIndex,
 				  UScriptStruct* const TraitType,
-				  int32                LineIndexHint,
+				  TraitLineIndexType   LineIndexHint,
 				  void* const          OutTraitData,
 				  bool                 bTraitDataInitialized = true) const
 	{
@@ -966,8 +1084,8 @@ class APPARATUSRUNTIME_API UChunk
 					 (LineIndexHint >= TraitLinesNum()) ||
 					 (TraitLineTypeAt(LineIndexHint) != TraitType)))
 		{
-			LineIndexHint = Traitmark.IndexOf(TraitType);
-			if (UNLIKELY(LineIndexHint == InvalidTraitLineIndex))
+			LineIndexHint = TraitLineIndexOf(TraitType);
+			if (UNLIKELY((LineIndexHint == InvalidTraitLineIndex) || (TraitLineTypeAt(LineIndexHint) != TraitType)))
 			{
 				return EApparatusStatus::Missing;
 			}
@@ -979,15 +1097,15 @@ class APPARATUSRUNTIME_API UChunk
 	 * Get a copy of a trait from the chunk's subject by its type identifier.
 	 *
 	 * @tparam T The type of the trait to copy.
-	 *
+	 * @param SlotIndex The index of the subject slot to query.
 	 * @return The copy of the trait.
 	 */
 	template < typename T >
 	FORCEINLINE T
-	TraitAt(const int32 SlotIndex) const
+	TraitAt(const SlotIndexType SlotIndex) const
 	{
 		T TraitTemp;
-		verify(OK(TraitAt(SlotIndex, T::StaticStruct(), static_cast<void*>(&TraitTemp))));
+		VerifyOK(TraitAt(SlotIndex, T::StaticStruct(), static_cast<void*>(&TraitTemp)));
 		return MoveTempIfPossible(TraitTemp);
 	}
 
@@ -1007,8 +1125,8 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return A read-only data of the trait.
 	 */
 	FORCEINLINE const void*
-	TraitPtrAt(const int32 SlotIndex,
-			   const int32 LineIndex) const
+	TraitPtrAt(const SlotIndexType      SlotIndex,
+			   const TraitLineIndexType LineIndex) const
 	{
 		check(SlotIndex != InvalidSlotIndex);
 		check(LineIndex != InvalidTraitLineIndex);
@@ -1024,17 +1142,41 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return The data of the trait.
 	 */
 	FORCEINLINE void*
-	TraitPtrAt(const int32 SlotIndex,
-			   const int32 LineIndex)
+	TraitPtrAt(const SlotIndexType      SlotIndex,
+			   const TraitLineIndexType LineIndex)
 	{
 		check(SlotIndex != InvalidSlotIndex);
 		check(LineIndex != InvalidTraitLineIndex);
 		return Lines[LineIndex][SlotIndex];
 	}
 
-/**
+	/**
+	 * Get the trait data pointer given subject's index and a line index.
+	 * Generic immutable data version.
+	 * 
+	 * Respects the inheritance model.
+	 * 
+	 * @param TraitTypeCheck The type to check.
+	 * @param SlotIndex An index of the subject slot.
+	 * @param LineIndex An index of the line.
+	 * @return The data of the trait.
+	 */
+	FORCEINLINE const void*
+	TraitPtrAt(UScriptStruct* const     TraitTypeCheck,
+			   const SlotIndexType      SlotIndex,
+			   const TraitLineIndexType LineIndex) const
+	{
+		check(TraitLineTypeAt(LineIndex)->IsChildOf(TraitTypeCheck));
+		check(SlotIndex != InvalidSlotIndex);
+		check(LineIndex != InvalidTraitLineIndex);
+		return Lines[LineIndex][SlotIndex];
+	}
+
+	/**
 	 * Get the trait data pointer given subject's index and a line index.
 	 * Generic mutable data version.
+	 * 
+	 * Respects the inheritance model.
 	 * 
 	 * @param TraitTypeCheck The type to check.
 	 * @param SlotIndex An index of the subject slot.
@@ -1042,19 +1184,55 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return The data of the trait.
 	 */
 	FORCEINLINE void*
-	TraitPtrAt(UScriptStruct* const TraitTypeCheck,
-			   const int32          SlotIndex,
-			   const int32          LineIndex)
+	TraitPtrAt(UScriptStruct* const     TraitTypeCheck,
+			   const SlotIndexType      SlotIndex,
+			   const TraitLineIndexType LineIndex)
 	{
-		check(TraitLineTypeAt(LineIndex) == TraitTypeCheck);
+		check(TraitLineTypeAt(LineIndex)->IsChildOf(TraitTypeCheck));
 		check(SlotIndex != InvalidSlotIndex);
 		check(LineIndex != InvalidTraitLineIndex);
 		return Lines[LineIndex][SlotIndex];
 	}
 
 	/**
+	 * Get the trait data pointer from the chunk's subject by its type identifier.
+	 * Statically-typed immutable version.
+	 *
+	 * @tparam T The trait type identifier.
+	 * @param SlotIndex The index of the subject within the chunk.
+	 * @param LineIndex An index of the line.
+	 * @return A pointer to the trait data.
+	 */
+	template < typename T >
+	FORCEINLINE const T*
+	TraitPtrAt(const SlotIndexType      SlotIndex,
+			   const TraitLineIndexType LineIndex) const
+	{
+		return static_cast<const T*>(TraitPtrAt(T::StaticStruct(), SlotIndex, LineIndex));
+	}
+
+	/**
+	 * Get the trait data pointer from the chunk's subject by its type identifier.
+	 * Statically-typed mutable version.
+	 *
+	 * @tparam T The trait type identifier.
+	 * @param SlotIndex The index of the subject within the chunk.
+	 * @param LineIndex An index of the line.
+	 * @return A pointer to the trait data.
+	 */
+	template < typename T >
+	FORCEINLINE T*
+	TraitPtrAt(const SlotIndexType      SlotIndex,
+			   const TraitLineIndexType LineIndex)
+	{
+		return static_cast<T*>(TraitPtrAt(T::StaticStruct(), SlotIndex, LineIndex));
+	}
+
+	/**
 	 * Get a trait reference given subject's index and a line index.
 	 * Statically typed constant version.
+	 * 
+	 * Respects the inheritance model.
 	 * 
 	 * @tparam T The type of the trait to get.
 	 * @param SlotIndex An index of the subject.
@@ -1063,8 +1241,8 @@ class APPARATUSRUNTIME_API UChunk
 	 */
 	template < typename T >
 	FORCEINLINE const T&
-	TraitRefAt(const int32 SlotIndex,
-			   const int32 LineIndex) const
+	TraitRefAt(const SlotIndexType      SlotIndex,
+			   const TraitLineIndexType LineIndex) const
 	{
 		check(SlotIndex != InvalidSlotIndex);
 		check(LineIndex != InvalidTraitLineIndex);
@@ -1075,6 +1253,8 @@ class APPARATUSRUNTIME_API UChunk
 	 * Get the trait reference given subject's index and a line index.
 	 * Statically typed mutable version.
 	 * 
+	 * Respects the inheritance model.
+	 * 
 	 * @tparam T The type of the trait to get.
 	 * @param SlotIndex An index of the subject.
 	 * @param LineIndex An index of the line.
@@ -1082,8 +1262,8 @@ class APPARATUSRUNTIME_API UChunk
 	 */
 	template < typename T >
 	FORCEINLINE T&
-	TraitRefAt(const int32 SlotIndex,
-			   const int32 LineIndex)
+	TraitRefAt(const SlotIndexType      SlotIndex,
+			   const TraitLineIndexType LineIndex)
 	{
 		check(SlotIndex != InvalidSlotIndex);
 		check(LineIndex != InvalidTraitLineIndex);
@@ -1094,6 +1274,8 @@ class APPARATUSRUNTIME_API UChunk
 	 * Get the trait reference given subject's index and a line index hint.
 	 * Constant version.
 	 * 
+	 * Respects the inheritance model.
+	 * 
 	 * @tparam T The type of the trait to get.
 	 * @param SlotIndex The index of the subject.
 	 * @param LineIndexHint The hint for the index of the line.
@@ -1101,14 +1283,14 @@ class APPARATUSRUNTIME_API UChunk
 	 */
 	template < typename T >
 	FORCEINLINE const T&
-	TraitRefAtHinted(const int32 SlotIndex,
-					 int32       LineIndexHint) const
+	TraitRefAtHinted(const SlotIndexType SlotIndex,
+					 TraitLineIndexType  LineIndexHint) const
 	{
 		if (UNLIKELY((LineIndexHint == InvalidTraitLineIndex) || 
 					 (LineIndexHint >= TraitLinesNum()) ||
 					 (TraitLineTypeAt(LineIndexHint) != T::StaticStruct())))
 		{
-			LineIndexHint = Traitmark.template IndexOf<T>();
+			LineIndexHint = TraitLineIndexOf<T>();
 			checkf(LineIndexHint != InvalidTraitLineIndex,
 				   TEXT("A trait reference could not found: %s"), *(T::StaticStruct()->GetName()));
 		}
@@ -1125,23 +1307,24 @@ class APPARATUSRUNTIME_API UChunk
 	 */
 	template < typename T >
 	FORCEINLINE T&
-	TraitRefAtHinted(const int32 SlotIndex,
-					 int32       LineIndexHint)
+	TraitRefAtHinted(const SlotIndexType SlotIndex,
+					 TraitLineIndexType  LineIndexHint)
 	{
 		if (UNLIKELY((LineIndexHint == InvalidTraitLineIndex) || 
 					 (LineIndexHint >= TraitLinesNum()) ||
 					 (TraitLineTypeAt(LineIndexHint) != T::StaticStruct())))
 		{
-			LineIndexHint = Traitmark.template IndexOf<T>();
+			LineIndexHint = TraitLineIndexOf<T>();
 			checkf(LineIndexHint != InvalidTraitLineIndex,
-				   TEXT("A trait reference could not be found: %s"), *(T::StaticStruct()->GetName()));
+				   TEXT("A trait reference could not be found: %s"),
+				   *(T::StaticStruct()->GetName()));
 		}
 		return TraitRefAt<T>(SlotIndex, LineIndexHint);
 	}
 
 	/**
 	 * Get the read-only trait data pointer from the chunk's subject by its type identifier.
-	 * Dynamically-typed constant data version.
+	 * Dynamically-typed immutable data version.
 	 *
 	 * @param SlotIndex The index of the subject within the chunk.
 	 * @param TraitType The trait type identifier.	 *
@@ -1149,7 +1332,7 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return nullptr If there's no such trait in the chunk.
 	 */
 	const void*
-	TraitPtrAt(const int32                SlotIndex,
+	TraitPtrAt(const SlotIndexType        SlotIndex,
 			   const UScriptStruct* const TraitType) const
 	{
 		check((SlotIndex != FSubjectInfo::InvalidSlotIndex) &&
@@ -1158,12 +1341,10 @@ class APPARATUSRUNTIME_API UChunk
 		{
 			return nullptr;
 		}
-		for (int32 LineIndex = 0; LineIndex < TraitLinesNum(); ++LineIndex)
+		const auto LineIndexHint = TraitLineIndexOf(TraitType);
+		if (LIKELY(LineIndexHint != InvalidTraitLineIndex))
 		{
-			if (TraitLineTypeAt(LineIndex) == TraitType)
-			{
-				return TraitPtrAt(SlotIndex, LineIndex);
-			}
+			return TraitPtrAt(SlotIndex, LineIndexHint);
 		}
 		return nullptr;
 	}
@@ -1178,7 +1359,7 @@ class APPARATUSRUNTIME_API UChunk
 	 * @return nullptr If there's no such trait in the chunk.
 	 */
 	void*
-	TraitPtrAt(const int32          SlotIndex,
+	TraitPtrAt(const SlotIndexType  SlotIndex,
 			   UScriptStruct* const TraitType)
 	{
 		check((SlotIndex != FSubjectInfo::InvalidSlotIndex) &&
@@ -1187,12 +1368,10 @@ class APPARATUSRUNTIME_API UChunk
 		{
 			return nullptr;
 		}
-		for (int32 LineIndex = 0; LineIndex < TraitLinesNum(); ++LineIndex)
+		const auto LineIndexHint = TraitLineIndexOf(TraitType);
+		if (LIKELY(LineIndexHint != InvalidTraitLineIndex))
 		{
-			if (TraitLineTypeAt(LineIndex) == TraitType)
-			{
-				return TraitPtrAt(SlotIndex, LineIndex);
-			}
+			return TraitPtrAt(SlotIndex, LineIndexHint);
 		}
 		return nullptr;
 	}
@@ -1261,17 +1440,19 @@ class APPARATUSRUNTIME_API UChunk
 	 * Get the trait pointer given subject's index and a line index hint.
 	 * Constant version.
 	 * 
+	 * Respects the inheritance model.
+	 * 
 	 * @param SlotIndex The index of the subject.
 	 * @param TraitType The type of the trait to get.
 	 * @param LineIndexHint The hint for the index of the line.
 	 * @return The pointer to the trait data.
 	 */
 	FORCEINLINE const void*
-	TraitPtrAtHinted(const int32          SlotIndex,
+	TraitPtrAtHinted(const SlotIndexType  SlotIndex,
 					 UScriptStruct* const TraitType,
 					 int32                LineIndexHint) const
 	{
-		if (UNLIKELY(!TraitType))
+		if (UNLIKELY(TraitType == nullptr))
 		{
 			return nullptr;
 		}
@@ -1279,7 +1460,7 @@ class APPARATUSRUNTIME_API UChunk
 					 (LineIndexHint >= TraitLinesNum()) ||
 					 (TraitLineTypeAt(LineIndexHint) != TraitType)))
 		{
-			LineIndexHint = Traitmark.IndexOf(TraitType);
+			LineIndexHint = TraitLineIndexOf(TraitType);
 			if (UNLIKELY(LineIndexHint == InvalidTraitLineIndex))
 			{
 				return nullptr;
@@ -1291,17 +1472,19 @@ class APPARATUSRUNTIME_API UChunk
 	/**
 	 * Get the trait pointer given subject's index and a line index hint.
 	 * 
+	 * Respects the inheritance model.
+	 * 
 	 * @param SlotIndex The index of the subject.
 	 * @param TraitType The type of the trait to get.
 	 * @param LineIndexHint The hint for the index of the line.
 	 * @return The pointer to the trait data.
 	 */
 	FORCEINLINE void*
-	TraitPtrAtHinted(const int32          SlotIndex,
+	TraitPtrAtHinted(const SlotIndexType  SlotIndex,
 					 UScriptStruct* const TraitType,
-					 int32                LineIndexHint)
+					 TraitLineIndexType   LineIndexHint)
 	{
-		if (UNLIKELY(!TraitType))
+		if (UNLIKELY(TraitType == nullptr))
 		{
 			return nullptr;
 		}
@@ -1309,7 +1492,7 @@ class APPARATUSRUNTIME_API UChunk
 					 (LineIndexHint >= TraitLinesNum()) ||
 					 (TraitLineTypeAt(LineIndexHint) != TraitType)))
 		{
-			LineIndexHint = Traitmark.IndexOf(TraitType);
+			LineIndexHint = TraitLineIndexOf(TraitType);
 			if (UNLIKELY(LineIndexHint == InvalidTraitLineIndex))
 			{
 				return nullptr;
@@ -1329,8 +1512,8 @@ class APPARATUSRUNTIME_API UChunk
 	 */
 	template < typename T >
 	FORCEINLINE const T*
-	TraitPtrAtHinted(const int32 SlotIndex,
-					 int32       LineIndexHint) const
+	TraitPtrAtHinted(const SlotIndexType      SlotIndex,
+					 const TraitLineIndexType LineIndexHint) const
 	{
 		return static_cast<const T*>(TraitPtrAtHinted(SlotIndex, T::StaticStruct(), LineIndexHint));
 	}
@@ -1346,10 +1529,152 @@ class APPARATUSRUNTIME_API UChunk
 	 */
 	template < typename T >
 	FORCEINLINE T*
-	TraitPtrAtHinted(const int32 SlotIndex,
-					 int32       LineIndexHint)
+	TraitPtrAtHinted(const SlotIndexType      SlotIndex,
+					 const TraitLineIndexType LineIndexHint)
 	{
 		return static_cast<T*>(TraitPtrAtHinted(SlotIndex, T::StaticStruct(), LineIndexHint));
+	}
+
+	/**
+	 * Get the read-only traits data pointers from the chunk's subject by their type identifier.
+	 * Dynamically-typed constant data version.
+	 * 
+	 * Respects the inheritance model.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator within the array.
+	 * @param[in] SlotIndex The index of the subject within the chunk.
+	 * @param[in] TraitType The trait type identifier.
+	 * @param[out] OutTraits The resulting traits receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator >
+	TOutcome<Paradigm>
+	TraitsPtrsAt(const SlotIndexType              SlotIndex,
+				const UScriptStruct* const       TraitType,
+				TArray<const void*, AllocatorT>& OutTraits) const
+	{
+		check((SlotIndex != FSubjectInfo::InvalidSlotIndex) &&
+			  (SlotIndex < Slots.Num()));
+		OutTraits.Reset();
+		if (UNLIKELY(TraitType == nullptr))
+		{
+			return EApparatusStatus::NoItems;
+		}
+		auto Status = EApparatusStatus::NoItems;
+		const auto& LinesCache = TraitLinesIndicesOf(TraitType);
+		for (auto LineIndex : LinesCache)
+		{
+			OutTraits.Add(TraitPtrAt(SlotIndex, LineIndex));
+			Status = EApparatusStatus::Success;
+		}
+		return Status;
+	}
+
+	/**
+	 * Get the read-only traits data pointers from the chunk's subject by their type identifier.
+	 * Dynamically-typed mutable data version.
+	 * 
+	 * Respects the inheritance model.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam AllocatorT The type of the allocator within the array.
+	 * @param[in] SlotIndex The index of the subject within the chunk.
+	 * @param[in] TraitType The trait type identifier.
+	 * @param[out] OutTraits The resulting traits receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator >
+	TOutcome<Paradigm>
+	TraitsPtrsAt(const SlotIndexType        SlotIndex,
+				 const UScriptStruct* const TraitType,
+				 TArray<void*, AllocatorT>& OutTraits)
+	{
+		check((SlotIndex != FSubjectInfo::InvalidSlotIndex) &&
+			  (SlotIndex < Slots.Num()));
+		OutTraits.Reset();
+		if (UNLIKELY(TraitType == nullptr))
+		{
+			return EApparatusStatus::NoItems;
+		}
+		auto Status = EApparatusStatus::NoItems;
+		const auto& LinesCache = TraitLinesIndicesOf(TraitType);
+		for (auto LineIndex : LinesCache)
+		{
+			OutTraits.Add(TraitPtrAt(SlotIndex, LineIndex));
+			Status = EApparatusStatus::Success;
+		}
+		return Status;
+	}
+
+	/**
+	 * Get read-only traits data pointers from the chunk's subject by their type identifier.
+	 * Statically-typed constant data version.
+	 * 
+	 * Respects the inheritance model.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam T The base type of the traits to get.
+	 * @tparam AllocatorT The type of the allocator within the array.
+	 * @param[in] SlotIndex The index of the subject's slot within the chunk.
+	 * @param[out] OutTraits The resulting traits receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm    = EParadigm::Default,
+			   typename  T           = void,
+			   typename  AllocatorT  = FDefaultAllocator,
+			   TTraitTypeSecurity<T> = true >
+	TOutcome<Paradigm>
+	TraitsPtrsAt(const FSubjectInfo::SlotIndexType SlotIndex,
+				 TArray<const T*, AllocatorT>&     OutTraits) const
+	{
+		check((SlotIndex != FSubjectInfo::InvalidSlotIndex) &&
+			  (SlotIndex < Slots.Num()));
+		OutTraits.Reset();
+		auto Status = EApparatusStatus::NoItems;
+		const auto& LinesCache = TraitLinesIndicesOf<T>();
+		for (auto LineIndex : LinesCache)
+		{
+			OutTraits.Add(TraitPtrAt<T>(SlotIndex, LineIndex));
+			Status = EApparatusStatus::Success;
+		}
+		return Status;
+	}
+
+	/**
+	 * Get mutable traits data pointers from the chunk's subject by their type identifier.
+	 * Statically-typed mutable data version.
+	 * 
+	 * Respects the inheritance model.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam T The type of the traits to gather.
+	 * @tparam AllocatorT The type of the allocator within the array.
+	 * @param[in] SlotIndex The index of the subject's slot within the chunk.
+	 * @param[out] OutTraits The resulting traits receiver.
+	 * @return The outcome of the operation.
+	 */
+	template < EParadigm Paradigm    = EParadigm::Default,
+			   typename  T           = void,
+			   typename  AllocatorT  = FDefaultAllocator,
+			   TTraitTypeSecurity<T> = true >
+	TOutcome<Paradigm>
+	TraitsPtrsAt(const FSubjectInfo::SlotIndexType SlotIndex,
+				 TArray<T*, AllocatorT>&           OutTraits)
+	{
+		check((SlotIndex != FSubjectInfo::InvalidSlotIndex) &&
+			  (SlotIndex < Slots.Num()));
+		OutTraits.Reset();
+		auto Status = EApparatusStatus::NoItems;
+		const auto& LinesCache = TraitLinesIndicesOf<T>();
+		for (auto LineIndex : LinesCache)
+		{
+			OutTraits.Add(TraitPtrAt<T>(SlotIndex, LineIndex));
+			Status = EApparatusStatus::Success;
+		}
+		return Status;
 	}
 
 	/// @}
@@ -1371,15 +1696,18 @@ class APPARATUSRUNTIME_API UChunk
 	/**
 	 * Fetch the traits for a subject into a traits data array.
 	 * 
+	 * @tparam AllocatorT The type of the array allocator.
 	 * @param SlotIndex The index of the subject within the belt.
-	 * @param Mapping The mapping to use while fetching.
+	 * @param TraitLinesIndices The indices of the lines to fetch.
 	 * @param OutTraits Initialized traits data to fill.
+	 * Must hold enough pointers for the @p TraitLinesIndices.
 	 * @return The status of the operation.
 	 */
+	template < typename AllocatorT = FDefaultAllocator >
 	EApparatusStatus
-	FetchTraitsPtrs(const int32          SlotIndex,
-					const TArray<int32>& Mapping,
-					void**               OutTraits);
+	FetchTraitsPtrs(const int32                      SlotIndex,
+					const TArray<int32, AllocatorT>& TraitLinesIndices,
+					void**                           OutTraits);
 
 	/**
 	 * Copy the traits from this chunk to another one, given subject indices.
@@ -1485,7 +1813,17 @@ class APPARATUSRUNTIME_API UChunk
 
 #pragma endregion Conversion
 
+#pragma region Initialization
+
+	UChunk();
+
+#pragma endregion Initialization
+
 }; //-class UChunk
+
+FORCEINLINE
+UChunk::UChunk()
+{}
 
 inline EApparatusStatus
 UChunk::TraitAt(const int32                SubjectIndex,
@@ -1498,13 +1836,11 @@ UChunk::TraitAt(const int32                SubjectIndex,
 	check(TraitType != nullptr);
 	check(OutTraitData != nullptr);
 
-	for (int32 LineIndex = 0; LineIndex < TraitLinesNum(); ++LineIndex)
+	const auto TraitLineIndex = TraitLineIndexOf(TraitType);
+	if (LIKELY(TraitLineIndex != INDEX_NONE) && (TraitLineTypeAt(TraitLineIndex) == TraitType))
 	{
-		if (TraitType == TraitLineTypeAt(LineIndex))
-		{
-			Lines[LineIndex].ElementAt(SubjectIndex, OutTraitData, bTraitDataInitialized);
-			return EApparatusStatus::Success;
-		}
+		Lines[TraitLineIndex].ElementAt(SubjectIndex, OutTraitData, bTraitDataInitialized);
+		return EApparatusStatus::Success;
 	}
 	return EApparatusStatus::Missing;
 }
@@ -1514,17 +1850,15 @@ UChunk::SetTraitAt(const int32                SubjectIndex,
 				   const UScriptStruct* const TraitType,
 				   const void* const          InTraitData)
 {
-	check((SubjectIndex > FSubjectInfo::InvalidSlotIndex) &&
+	check((SubjectIndex != FSubjectInfo::InvalidSlotIndex) &&
 		  (SubjectIndex < Slots.Num()));
 	check(TraitType != nullptr);
 	check(InTraitData != nullptr);
 
-	for (int32 ti = 0; ti < TraitLinesNum(); ++ti)
+	const auto TraitLineIndex = TraitLineIndexOf(TraitType);
+	if (LIKELY(TraitLineIndex != InvalidTraitLineIndex) && (TraitLineTypeAt(TraitLineIndex) == TraitType))
 	{
-		if (TraitType == TraitLineTypeAt(ti))
-		{
-			return Lines[ti].SetElementAt(SubjectIndex, InTraitData);
-		}
+		return Lines[TraitLineIndex].SetElementAt(SubjectIndex, InTraitData);
 	}
 
 	return EApparatusStatus::Missing;

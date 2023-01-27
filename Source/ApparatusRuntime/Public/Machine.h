@@ -765,9 +765,9 @@ class APPARATUSRUNTIME_API UMachine
 #pragma region Trait Registry
 
 	FORCEINLINE FTraitInfo&
-	DoObtainTraitInfo(const UScriptStruct* TraitType)
+	DoObtainTraitInfo(const UScriptStruct* const TraitType)
 	{
-		checkf(TraitType, TEXT("The trait type must be provided to get the info about."));
+		checkf(TraitType != nullptr, TEXT("The trait type must be provided to get the info about."));
 		auto* InfoPtr = Traits.Find(TraitType);
 
 		if (LIKELY(InfoPtr != nullptr))
@@ -775,40 +775,82 @@ class APPARATUSRUNTIME_API UMachine
 			return *InfoPtr;
 		}
 
-		return Traits.Add(TraitType, FTraitInfo(TraitType, Traits.Num() + FTraitInfo::FirstId));
+		// A static is used here, cause the id has to be consistently
+		// incremented for correctly querying the base type infos in the constructor...
+		static auto TraitId = FTraitInfo::FirstId;
+
+		return Traits.Add(TraitType, FTraitInfo(TraitType, TraitId++));
 	}
 
-	FORCEINLINE int32
-	DoObtainTraitId(const UScriptStruct* TraitType)
+	FORCEINLINE FTraitInfo::IdType
+	DoObtainTraitId(const UScriptStruct* const TraitType)
 	{
-		checkf(TraitType, TEXT("The trait type must be provided to get the id of."));
+		checkf(TraitType != nullptr, TEXT("The trait type must be provided to get the id of."));
 
 		return DoObtainTraitInfo(TraitType).Id;
 	}
 
 	FORCEINLINE const FBitMask&
-	DoObtainTraitMask(const UScriptStruct* TraitType)
+	DoObtainTraitMask(const UScriptStruct* const TraitType)
 	{
-		checkf(TraitType, TEXT("The trait type must be provided to get the mask for."));
+		checkf(TraitType != nullptr, TEXT("The trait type must be provided to get the mask for."));
 
 		return DoObtainTraitInfo(TraitType).Mask;
+	}
+
+	FORCEINLINE const FBitMask&
+	DoObtainExcludingTraitMask(const UScriptStruct* const TraitType)
+	{
+		checkf(TraitType != nullptr, TEXT("The trait type must be provided to get the excluding mask for."));
+
+		return DoObtainTraitInfo(TraitType).ExcludingMask;
 	}
 
 #pragma endregion Trait Registry
 
 #pragma region Detail Registry
 
-	FDetailInfo&
-	DoObtainDetailInfo(const TSubclassOf<UDetail> DetailClass);
+	FORCEINLINE FDetailInfo&
+	DoObtainDetailInfo(const TSubclassOf<UDetail> DetailClass)
+	{
+		checkf(DetailClass != nullptr, TEXT("The detail class must be provided to get the info about."));
+		auto* InfoPtr = Details.Find(DetailClass);
 
-	int32
-	DoObtainDetailId(const TSubclassOf<UDetail> DetailClass);
+		if (LIKELY(InfoPtr != nullptr))
+		{
+			return *InfoPtr;
+		}
 
-	const FBitMask&
-	DoObtainDetailMask(const TSubclassOf<UDetail> DetailClass);
+		// A static is used here, cause the id has to be consistently
+		// incremented for correctly querying the base class infos in the constructor...
+		static auto DetailId = FDetailInfo::FirstId;
 
-	const FBitMask&
-	DoObtainExcludedDetailMask(const TSubclassOf<UDetail> DetailClass);
+		return Details.Add(DetailClass, FDetailInfo(DetailClass, DetailId++));
+	}
+
+	FORCEINLINE FDetailInfo::IdType
+	DoObtainDetailId(const TSubclassOf<UDetail> DetailClass)
+	{
+		checkf(DetailClass != nullptr, TEXT("The detail class must be provided to get the id of."));
+
+		return DoObtainDetailInfo(DetailClass).Id;
+	}
+
+	FORCEINLINE const FBitMask&
+	DoObtainDetailMask(const TSubclassOf<UDetail> DetailClass)
+	{
+		checkf(DetailClass != nullptr, TEXT("The detail class must be provided to get the mask for."));
+
+		return DoObtainDetailInfo(DetailClass).Mask;
+	}
+
+	FORCEINLINE const FBitMask&
+	DoObtainExcludingDetailMask(const TSubclassOf<UDetail> DetailClass)
+	{
+		checkf(DetailClass != nullptr, TEXT("The detail class must be provided to get the excluding mask for."));
+
+		return DoObtainDetailInfo(DetailClass).ExcludingMask;
+	}
 
 #pragma endregion Detail Registry
 
@@ -1308,10 +1350,10 @@ class APPARATUSRUNTIME_API UMachine
 	/**
 	 * Obtain a trait's unique identifier.
 	 */
-	static FORCEINLINE int32
+	static FORCEINLINE auto
 	ObtainTraitId(const UScriptStruct* TraitType)
 	{
-		check(TraitType);
+		check(TraitType != nullptr);
 		return RetainInstance()->DoObtainTraitId(TraitType);
 	}
 
@@ -1345,6 +1387,27 @@ class APPARATUSRUNTIME_API UMachine
 		return ObtainTraitMask(T::StaticStruct());
 	}
 
+	/**
+	 * Obtain the excluded mask of a trait type.
+	 */
+	static FORCEINLINE const FBitMask&
+	ObtainExcludingTraitMask(const UScriptStruct* const TraitType)
+	{
+		checkf(TraitType != nullptr,
+			   TEXT("The trait type must be provided in order to get its excluding mask."));
+		return RetainInstance()->DoObtainExcludingTraitMask(TraitType);
+	}
+
+	/**
+	 * Obtain the excluding mask of a trait type.
+	 */
+	template < typename T >
+	static FORCEINLINE const FBitMask&
+	ObtainExcludingTraitMask()
+	{
+		return ObtainExcludingTraitMask(T::StaticStruct());
+	}
+
 #pragma endregion Trait Registration
 
 #pragma region Detail Registration
@@ -1352,10 +1415,10 @@ class APPARATUSRUNTIME_API UMachine
 	/**
 	 * Obtain a detail's unique identifier.
 	 */
-	static FORCEINLINE int32
+	static FORCEINLINE auto
 	ObtainDetailId(const TSubclassOf<UDetail> DetailClass)
 	{
-		check(DetailClass);
+		check(DetailClass != nullptr);
 		return RetainInstance()->DoObtainDetailId(DetailClass);
 	}
 
@@ -1375,7 +1438,7 @@ class APPARATUSRUNTIME_API UMachine
 	static FORCEINLINE const FBitMask&
 	ObtainDetailMask(const TSubclassOf<UDetail> DetailClass)
 	{
-		check(DetailClass);
+		check(DetailClass != nullptr);
 		return RetainInstance()->DoObtainDetailMask(DetailClass);
 	}
 
@@ -1383,11 +1446,11 @@ class APPARATUSRUNTIME_API UMachine
 	 * Obtain the excluded mask of a detail class.
 	 */
 	static FORCEINLINE const FBitMask&
-	ObtainExcludedDetailMask(const TSubclassOf<UDetail> DetailClass)
+	ObtainExcludingDetailMask(const TSubclassOf<UDetail> DetailClass)
 	{
 		checkf(DetailClass,
 			   TEXT("The detail class must be provided in order to get its mask."));
-		return RetainInstance()->DoObtainExcludedDetailMask(DetailClass);
+		return RetainInstance()->DoObtainExcludingDetailMask(DetailClass);
 	}
 
 	/**
@@ -1403,9 +1466,9 @@ class APPARATUSRUNTIME_API UMachine
 	 * Obtain the excluded mask of a details's class.
 	 */
 	static FORCEINLINE const FBitMask&
-	ObtainExcludedDetailMask(const UDetail* Detail)
+	ObtainExcludingDetailMask(const UDetail* Detail)
 	{
-		return ObtainExcludedDetailMask(Detail->GetClass());
+		return ObtainExcludingDetailMask(Detail->GetClass());
 	}
 
 	/**
@@ -1423,9 +1486,9 @@ class APPARATUSRUNTIME_API UMachine
 	 */
 	template < class T >
 	static FORCEINLINE const FBitMask&
-	ObtainExcludedDetailMask()
+	ObtainExcludingDetailMask()
 	{
-		return ObtainExcludedDetailMask(T::StaticClass());
+		return ObtainExcludingDetailMask(T::StaticClass());
 	}
 
 #pragma endregion Detail Registration
@@ -1670,16 +1733,22 @@ class APPARATUSRUNTIME_API UMachine
 
 #pragma region Traitmark Inlines
 
-FORCEINLINE int32
-FTraitmark::GetTraitId(const UScriptStruct* TraitType)
+FORCEINLINE FTraitInfo::IdType
+FTraitmark::GetTraitId(const UScriptStruct* const TraitType)
 {
 	return UMachine::ObtainTraitId(TraitType);
 }
 
 FORCEINLINE const FBitMask&
-FTraitmark::GetTraitMask(const UScriptStruct* TraitType)
+FTraitmark::GetTraitMask(const UScriptStruct* const TraitType)
 {
 	return UMachine::ObtainTraitMask(TraitType);
+}
+
+FORCEINLINE const FBitMask&
+FTraitmark::GetExcludingTraitMask(const UScriptStruct* const TraitType)
+{
+	return UMachine::ObtainExcludingTraitMask(TraitType);
 }
 
 FORCEINLINE
@@ -1716,7 +1785,7 @@ FTraitmark::RegisteredTraitsNum()
 
 #pragma region Detailmark Inlines
 
-FORCEINLINE int32
+FORCEINLINE FDetailInfo::IdType
 FDetailmark::GetDetailId(const TSubclassOf<UDetail> DetailClass)
 {
 	return UMachine::ObtainDetailId(DetailClass);
@@ -1729,9 +1798,9 @@ FDetailmark::GetDetailMask(const TSubclassOf<UDetail> DetailClass)
 }
 
 FORCEINLINE const FBitMask&
-FDetailmark::GetExcludedDetailMask(const TSubclassOf<UDetail> DetailClass)
+FDetailmark::GetExcludingDetailMask(const TSubclassOf<UDetail> DetailClass)
 {
-	return UMachine::ObtainExcludedDetailMask(DetailClass);
+	return UMachine::ObtainExcludingDetailMask(DetailClass);
 }
 
 FORCEINLINE const FBitMask&
@@ -1779,32 +1848,59 @@ FDetailmark::RegisteredDetailsNum()
 
 #pragma endregion Detailmark Inlines
 
-#pragma region Detail Info
+#pragma region Trait Info Inlines
 
 FORCEINLINE
-FDetailInfo::FDetailInfo(const TSubclassOf<UDetail> InClass,
-						 const int32                InId)
-  : Class(InClass),
-	Id(InId),
-	Mask(InId + 1),
-	ExcludedMask(InId + 1)
+FTraitInfo::FTraitInfo(const UScriptStruct* const InType,
+					   const IdType               InId)
+  : Type(InType)
+  , Id(InId)
+  , Mask(InId + 1)
+  , ExcludingMask(InId + 1)
 {
-	check(InId > InvalidId);
-	check(InClass != UDetail::StaticClass());
+	check(InType != nullptr);
+	check(InId != InvalidId);
 
 	Mask.SetAt(Id, true); // Own bit
 
 	// Base classes bits...
-	TSubclassOf<UDetail> BaseType = InClass->GetSuperClass();
-	if (BaseType && BaseType != UDetail::StaticClass())
+	UScriptStruct* BaseType = Cast<UScriptStruct>(InType->GetSuperStruct());
+	if (BaseType != nullptr)
 	{
-		Mask.Include(UMachine::ObtainDetailMask(BaseType));
+		Mask.Include(UMachine::ObtainTraitMask(BaseType));
 	}
 
-	ExcludedMask.SetAt(Id, true);
+	ExcludingMask.SetAt(Id, true);
 }
 
-#pragma endregion Detail Info
+#pragma endregion Trait Info Inlines
+
+#pragma region Detail Info Inlines
+
+FORCEINLINE
+FDetailInfo::FDetailInfo(const TSubclassOf<UDetail> InClass,
+						 const int32                InId)
+  : Class(InClass)
+  , Id(InId)
+  , Mask(InId + 1)
+  , ExcludingMask(InId + 1)
+{
+	check(InClass != nullptr);
+	check(InId != InvalidId);
+
+	Mask.SetAt(Id, true); // Own bit
+
+	// Base classes bits...
+	TSubclassOf<UDetail> BaseClass = InClass->GetSuperClass();
+	if (BaseClass != nullptr)
+	{
+		Mask.Include(UMachine::ObtainDetailMask(BaseClass));
+	}
+
+	ExcludingMask.SetAt(Id, true);
+}
+
+#pragma endregion Detail Info Inlines
 
 #pragma region Chunk Inlines
 
@@ -1877,6 +1973,14 @@ FDetailInfo::FDetailInfo(const TSubclassOf<UDetail> InClass,
 #endif
 
 #pragma endregion Subject Record
+
+#pragma region Belt Slot
+
+#if CPP
+#include "BeltSlot.inl"
+#endif
+
+#pragma endregion Belt Slot
 
 #pragma region Belt
 

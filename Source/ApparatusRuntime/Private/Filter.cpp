@@ -79,17 +79,17 @@ FFilter::PostSerialize(const FArchive& Archive)
 #endif
 				continue;
 			}
-			const FBitMask& ExcludedMask = FTraitmark::GetTraitMask(ExcludedTrait);
+			const FBitMask& ExcludingMask = FTraitmark::GetExcludingTraitMask(ExcludedTrait);
 			// Duplicate excluded traits are fine during the editing...
 #if !WITH_EDITOR
-			if (UNLIKELY(ExcludedTraitsMask.Includes(ExcludedMask)))
+			if (UNLIKELY(ExcludedTraitsMask.Includes(ExcludingMask)))
 			{
 				
 				ExcludedTraits.RemoveAtSwap(i--);
 				continue;
 			}
 #endif
-			ExcludedTraitsMask.Include(ExcludedMask);
+			ExcludedTraitsMask.Include(ExcludingMask);
 		}
 		ExcludedDetailsMask.Reset();
 		for (int32 i = 0; i < ExcludedDetails.Num(); ++i)
@@ -103,16 +103,16 @@ FFilter::PostSerialize(const FArchive& Archive)
 #endif
 				continue;
 			}
-			const FBitMask& ExcludedMask = FDetailmark::GetExcludedDetailMask(ExcludedDetail);
+			const FBitMask& ExcludingMask = FDetailmark::GetExcludingDetailMask(ExcludedDetail);
 			// Duplicate excluded details are fine during the editing...
 #if !WITH_EDITOR
-			if (UNLIKELY(ExcludedDetailsMask.Includes(ExcludedMask)))
+			if (UNLIKELY(ExcludedDetailsMask.Includes(ExcludingMask)))
 			{
 				ExcludedDetails.RemoveAtSwap(i--);
 				continue;
 			}
 #endif
-			ExcludedDetailsMask.Include(ExcludedMask);
+			ExcludedDetailsMask.Include(ExcludingMask);
 		}
 
 		// Reset the cache in case of loading...

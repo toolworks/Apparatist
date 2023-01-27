@@ -82,41 +82,51 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 			  Meta = (AllowPrivateAccess = "true"))
 	int32 Capacity = 0;
 
+	/**
+	 * Get the size of the structure.
+	 */
 	FORCEINLINE int32
+	GetSafeStructureSize() const
+	{
+		if (UNLIKELY(ElementType == nullptr)) return 0;
+		return FMath::Max(1, ElementType->GetStructureSize());
+	}
+
+	FORCEINLINE auto
 	CalcSlackGrow(const int32 NewCount) const
 	{
 		check(ElementType);
-		return DefaultCalculateSlackGrow(NewCount, Capacity, ElementType->GetStructureSize(), /*bAllowQuantize=*/true);
+		return DefaultCalculateSlackGrow(NewCount, Capacity, GetSafeStructureSize(), /*bAllowQuantize=*/true);
 	}
 
-	FORCEINLINE int32
+	FORCEINLINE auto
 	CalcSlackGrow() const
 	{
 		return CalcSlackGrow(Count);
 	}
 
-	FORCEINLINE int32
+	FORCEINLINE auto
 	CalcSlackShrink(const int32 NewCount) const
 	{
 		check(ElementType);
-		return DefaultCalculateSlackShrink(NewCount, Capacity, ElementType->GetStructureSize(), /*bAllowQuantize=*/true);
+		return DefaultCalculateSlackShrink(NewCount, Capacity, GetSafeStructureSize(), /*bAllowQuantize=*/true);
 	}
 
-	FORCEINLINE int32
+	FORCEINLINE auto
 	CalcSlackShrink() const
 	{
 		return CalcSlackShrink(Count);
 	}
 
-	FORCEINLINE int32
+	FORCEINLINE auto
 	CalcSlackReserve(const int32 NewCount) const
 	{
 		check(ElementType);
-		return DefaultCalculateSlackReserve(NewCount, ElementType->GetStructureSize(), /*bAllowQuantize=*/true);
+		return DefaultCalculateSlackReserve(NewCount, GetSafeStructureSize(), /*bAllowQuantize=*/true);
 	}
 
 
-	FORCEINLINE int32
+	FORCEINLINE auto
 	CalcSlackReserve() const
 	{
 		return CalcSlackReserve(Count);
@@ -135,9 +145,9 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 	{
 		check(Index >= 0);
 		check(Index < Capacity);
-		check(ElementType);
+		check(ElementType != nullptr);
 		// Use SIZE_T cast to be able to address more memory:
-		return (void*)(Data + (SIZE_T)ElementType->GetStructureSize() * (SIZE_T)Index);
+		return (void*)(Data + (SIZE_T)GetSafeStructureSize() * (SIZE_T)Index);
 	}
 
 	/**
@@ -154,9 +164,9 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 	{
 		check(Index >= 0);
 		check(Index < Capacity);
-		check(ElementType);
+		check(ElementType != nullptr);
 		// Use SIZE_T cast to be able to address more memory:
-		return (const void*)(Data + (SIZE_T)ElementType->GetStructureSize() * (SIZE_T)Index);
+		return (const void*)(Data + (SIZE_T)GetSafeStructureSize() * (SIZE_T)Index);
 	}
 
   public:
@@ -178,7 +188,7 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 	FORCEINLINE int32
 	GetElementSize() const
 	{
-		if (!ElementType) return 0;
+		if (UNLIKELY(ElementType == nullptr)) return 0;
 		return ElementType->GetStructureSize();
 	}
 
@@ -232,6 +242,8 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 	/**
 	 * Get an element reference at a specific index.
 	 * 
+	 * Respects the inheritance model.
+	 * 
 	 * @tparam T The type of the element to cast to. Used for extra safety.
 	 * @param Index The index of an element to get the data of.
 	 * @return The initialized data of the element struct.
@@ -241,13 +253,15 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 	RefAt(const int32 Index)
 	{
 		check(Index < Count);
-		check(GetElementType() == T::StaticStruct());
+		check(GetElementType()->IsChildOf(T::StaticStruct()));
 		return *(static_cast<T*>(MemoryAt(Index)));
 	}
 
 	/**
 	 * Get an element reference at a specific index.
 	 * Constant version.
+	 * 
+	 * Respects the inheritance model.
 	 * 
 	 * @tparam T The type of the element to cast to. Used for extra safety.
 	 * @param Index The index of an element to get the data of.
@@ -258,12 +272,14 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 	RefAt(const int32 Index) const
 	{
 		check(Index < Count);
-		check(GetElementType() == T::StaticStruct());
+		check(GetElementType()->IsChildOf(T::StaticStruct()));
 		return *(static_cast<const T*>(MemoryAt(Index)));
 	}
 
 	/**
 	 * Get an element reference at a specific index.
+	 * 
+	 * Respects the inheritance model.
 	 * 
 	 * @tparam T The type of the element to cast to. Used for extra safety.
 	 * @param Index The index of an element to get the data of.
@@ -274,13 +290,15 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 	PtrAt(const int32 Index)
 	{
 		check(Index < Count);
-		check(GetElementType() == T::StaticStruct());
+		check(GetElementType()->IsChildOf(T::StaticStruct()));
 		return static_cast<T*>(MemoryAt(Index));
 	}
 
 	/**
 	 * Get an element reference at a specific index.
 	 * Constant version.
+	 * 
+	 * Respects the inheritance model.
 	 * 
 	 * @tparam T The type of the element to cast to. Used for extra safety.
 	 * @param Index The index of an element to get the data of.
@@ -291,7 +309,7 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 	PtrAt(const int32 Index) const
 	{
 		check(Index < Count);
-		check(GetElementType() == T::StaticStruct());
+		check(GetElementType()->IsChildOf(T::StaticStruct()));
 		return static_cast<const T*>(MemoryAt(Index));
 	}
 
@@ -336,7 +354,7 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 		}
 		check(ElementType);
 		Capacity = InCapacity;
-		Data = (uint8*)Apparatus_ReallocArray(Data, Capacity, ElementType->GetStructureSize());
+		Data = (uint8*)Apparatus_ReallocArray(Data, Capacity, GetSafeStructureSize(), ElementType->GetMinAlignment());
 		return true;
 	}
 
@@ -430,7 +448,7 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 			if (Capacity != NewCapacity)
 			{
 				Capacity = NewCapacity;
-				Data = (uint8*)Apparatus_ReallocArray(Data, NewCapacity, ElementType->GetStructureSize());
+				Data = (uint8*)Apparatus_ReallocArray(Data, NewCapacity, GetSafeStructureSize(), ElementType->GetMinAlignment());
 			}
 		}
 	}
@@ -456,7 +474,7 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 				ElementType->DestroyStruct(Data, Count);
 			}
 			ElementType = InElementType;
-			Data = (uint8*)Apparatus_ReallocArray(Data, InCapacity, ElementType->GetStructureSize());
+			Data = (uint8*)Apparatus_ReallocArray(Data, InCapacity, GetSafeStructureSize(), ElementType->GetMinAlignment());
 			Count = 0;
 			Capacity = InCapacity;
 			check(Count <= Capacity);
@@ -481,7 +499,7 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 				ElementType->DestroyStruct(Data, Count);
 			}
 			ElementType = Array.ElementType;
-			Data = (uint8*)Apparatus_ReallocArray(Data, Array.Capacity, ElementType->GetStructureSize());
+			Data = (uint8*)Apparatus_ReallocArray(Data, Array.Capacity, GetSafeStructureSize(), ElementType->GetMinAlignment());
 			ElementType->InitializeStruct(Data, Array.Count);
 			ElementType->CopyScriptStruct(Data, Array.Data, Array.Count);
 			Count = Array.Count;
@@ -535,7 +553,7 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 		check(ElementType);
 		check(Count >= 0);
 		check(Capacity >= 0);
-		Data = (uint8*)Apparatus_MallocArray(Capacity, ElementType->GetStructureSize());
+		Data = (uint8*)Apparatus_MallocArray(Capacity, GetSafeStructureSize(), ElementType->GetMinAlignment());
 	}
 
 	FORCEINLINE
@@ -547,7 +565,7 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 		check(ElementType);
 		check(Count >= 0);
 		check(Capacity >= 0);
-		Data = (uint8*)Apparatus_MallocArray(Capacity, ElementType->GetStructureSize());
+		Data = (uint8*)Apparatus_MallocArray(Capacity, GetSafeStructureSize(), ElementType->GetMinAlignment());
 		ElementType->InitializeStruct(Data, Count);
 		ElementType->CopyScriptStruct(Data, Array.Data, Count);
 	}
@@ -575,6 +593,7 @@ struct APPARATUSRUNTIME_API FScriptStructArray
 		{
 			ElementType->DestroyStruct(Data, Count);
 			FMemory::Free(Data);
+			Data = nullptr;
 		}
 	}
 

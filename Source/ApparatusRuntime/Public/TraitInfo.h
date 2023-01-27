@@ -44,17 +44,20 @@ struct APPARATUSRUNTIME_API FTraitInfo
 
   public:
 
-	enum {
-		/**
-		 * Invalid trait identifier.
-		 */
-		InvalidId = -1,
+	/**
+	 * The type of the trait identifier.
+	 */
+	using IdType = int32;
 
-		/**
-		 * First valid trait identifier.
-		 */
-		FirstId = 0,
-	};
+	/**
+	 * Invalid trait identifier.
+	 */
+	static constexpr IdType InvalidId = -1;
+
+	/**
+	 * First trait identifier.
+	 */
+	static constexpr IdType FirstId = 0;
 
   private:
 
@@ -85,12 +88,17 @@ struct APPARATUSRUNTIME_API FTraitInfo
 	 *
 	 * Matches its index within the global machine's array.
 	 */
-	int32 Id = InvalidId;
+	IdType Id = InvalidId;
 
 	/**
 	 * The bitmask of the trait.
 	 */
 	FBitMask Mask;
+
+	/**
+	 * The excluded bitmask of the trait.
+	 */
+	FBitMask ExcludingMask;
 
 	/**
 	 * Construct a stale trait information struct.
@@ -101,14 +109,10 @@ struct APPARATUSRUNTIME_API FTraitInfo
 
 	/**
 	 * Construct a new trait information struct.
+	 * 
+	 * @param InType The type of the trait.
+	 * @param InId The identifier of the trait.
 	 */
-	FORCEINLINE
-	FTraitInfo(const UScriptStruct* const InType, const int32 InId)
-	  : Type(InType),
-		Id(InId),
-		Mask(InId + 1)
-	{
-		check(InId > InvalidId);
-		Mask.SetAt(Id, true);
-	}
+	FTraitInfo(const UScriptStruct* const InType,
+			   const IdType               InId);
 }; //-struct FTraitInfo

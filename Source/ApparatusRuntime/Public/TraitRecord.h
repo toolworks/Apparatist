@@ -776,6 +776,25 @@ struct APPARATUSRUNTIME_API FTraitRecord
 	/// @}
 #pragma endregion Comparison
 
+#pragma region Hashing
+	/// @name Hashing
+	/// @{
+
+	/**
+	 * Calculate the hash of this trait record.
+	 */
+	FORCEINLINE uint32
+	CalcHash() const
+	{
+		if (UNLIKELY(Type == nullptr)) return 0;
+		// We absolutely need data here since otherwise
+		// the default struct instance won't match the allocated one.
+		return HashCombine(GetTypeHash(Type), Type->GetStructTypeHash(GetData()));
+	}
+
+	/// @}
+#pragma endregion Hashing
+
 #pragma region Initialization
 	/// @name Initialization
 	/// @{
@@ -907,6 +926,19 @@ struct APPARATUSRUNTIME_API FTraitRecord
 #pragma endregion Initialization
 
 }; // struct FTraitRecord
+
+
+/**
+ * Calculate a hash sum of a trait record.
+ * 
+ * @param TraitRecord The trait record to hash.
+ * @return The resulting hashing sum.
+ */
+FORCEINLINE uint32
+GetTypeHash(const FTraitRecord& TraitRecord)
+{
+	return TraitRecord.CalcHash();
+}
 
 template<>
 struct TStructOpsTypeTraits<FTraitRecord> : public TStructOpsTypeTraitsBase2<FTraitRecord>

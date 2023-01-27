@@ -645,6 +645,14 @@ IsPayloadType()
 }
 
 /**
+ * A guarantee for a type to be a payload.
+ * 
+ * @tparam T The type to examine.
+ */
+template < typename T >
+using TPayloadTypeSecurity = more::enable_if_t<IsPayloadType<T>(), bool>;
+
+/**
  * Harsh outcome with no status but an optional payload.
  * 
  * @tparam PayloadT The optional payload to provide.
@@ -2653,9 +2661,10 @@ OK(const TPoliteOutcome<PayloadT> (&Outcomes)[N])
  * 
  * @tparam PayloadT The type of the payload to examine.
  */
-template < typename PayloadT, more::enable_if_t<IsPayloadType<more::flatten_t<PayloadT>>(), int> = 0 >
+template < typename PayloadT,
+		   TPayloadTypeSecurity<std::decay_t<PayloadT>> = true >
 constexpr FORCEINLINE bool
-OK(const PayloadT&)
+OK(PayloadT&&)
 {
 	return true;
 }
@@ -2686,10 +2695,10 @@ IsNoop(const TPoliteOutcome<PayloadT>& Outcome)
  * Any other outcome is considered to be a payload
  * which is never a noop.
  */
-template < typename T,
-		   more::enable_if_t<IsPayloadType<more::flatten_t<T>>(), bool> = true >
+template < typename PayloadT,
+		   TPayloadTypeSecurity<std::decay_t<PayloadT>> = true >
 constexpr FORCEINLINE bool
-IsNoop(const T&)
+IsNoop(PayloadT&&)
 {
 	return false;
 }
@@ -2954,7 +2963,7 @@ MakeOutcome()
  * @return The resulting outcome.
  */
 template < EParadigm Paradigm, typename PayloadT, EApparatusStatus Status, typename InPayloadT,
-		   more::enable_if_t<IsPayloadType<more::flatten_t<InPayloadT>>(), int> = 0 >
+		   TPayloadTypeSecurity<std::decay_t<InPayloadT>> = true >
 static constexpr TOutcome<Paradigm, PayloadT>
 MakeOutcome(InPayloadT&& Payload)
 {
@@ -2972,7 +2981,7 @@ MakeOutcome(InPayloadT&& Payload)
  * @return The resulting outcome.
  */
 template < EParadigm Paradigm, EApparatusStatus Status, typename PayloadT, typename InPayloadT,
-		   more::enable_if_t<IsPayloadType<more::flatten_t<InPayloadT>>(), int> = 0 >
+		   TPayloadTypeSecurity<std::decay_t<InPayloadT>> = true >
 static constexpr TOutcome<Paradigm, PayloadT>
 MakeOutcome(InPayloadT&& Payload)
 {
@@ -3008,7 +3017,8 @@ MakeOutcome(const EApparatusStatus Status, InPayloadT&& Payload)
  */
 template < EParadigm Paradigm, typename PayloadT,
 		   typename InPayloadT, typename AnyPayloadT,
-		   more::enable_if_t<IsPayloadType<more::flatten_t<AnyPayloadT>>(), bool> = true >
+		   TPayloadTypeSecurity<std::decay_t<AnyPayloadT>> = true,
+		   TPayloadTypeSecurity<std::decay_t<InPayloadT>> = true >
 static constexpr TOutcome<Paradigm, PayloadT>
 MakeOutcome(AnyPayloadT&&, InPayloadT&& Payload)
 {
@@ -3332,9 +3342,10 @@ ToStatus(const TPoliteOutcome<PayloadT>& Outcome)
  * @param Outcome The outcome to convert.
  * @return The successful status.
  */
-template < typename PayloadT >
+template < typename PayloadT,
+		   TPayloadTypeSecurity<more::flatten_t<PayloadT>> = true>
 constexpr FORCEINLINE EApparatusStatus
-ToStatus(const PayloadT& Outcome)
+ToStatus(PayloadT&& Outcome)
 {
 	return EApparatusStatus::Success;
 }
@@ -3413,22 +3424,22 @@ struct TOutcomeCombiner<EApparatusStatus, B>
 };
 
 /**
- * Combine into a polite outcome.
+ * Combine a status and a payload into a filled polite outcome.
  * 
  * @tparam Paradigm The paradigm to work under.
- * @tparam T The type of the payload to combine with.
+ * @tparam PayloadT The type of the payload to combine with.
  * @param Status The status to combine.
  * @param Payload The payload to combine with.
  * @return The resulting polite outcome.
  * Just combines the status and the payload into a polite outcome..
  */
 template < EParadigm Paradigm = EParadigm::Polite,
-		   typename T,
-		   more::enable_if_t<IsPayloadType<more::flatten_t<T>>(), bool> = true >
+		   typename PayloadT,
+		   TPayloadTypeSecurity<std::decay_t<PayloadT>> = true >
 constexpr FORCEINLINE auto
-OutcomeCombine(const EApparatusStatus Status, T&& Payload)
+OutcomeCombine(const EApparatusStatus Status, PayloadT&& Payload)
 {
-	return MakeOutcome<Paradigm, more::flatten_t<T>>(Status, std::forward<T>(Payload));
+	return MakeOutcome<Paradigm, std::decay_t<PayloadT>>(Status, std::forward<PayloadT>(Payload));
 }
 
 #pragma endregion Status + Payload
@@ -3440,9 +3451,6 @@ struct TOutcomeCombiner<A, EApparatusStatus>
 {
 	using Type = TPoliteOutcome<A>;
 };
-
-template < typename T >
-using TPayloadTypeSecurity = more::enable_if_t<IsPayloadType<T>(), bool>;
 
 /**
  * Combine a payload and a status into a polite non-empty outcome.
@@ -3662,36 +3670,58 @@ struct TOutcomeCombiner<A, B>
 };
 
 /**
- * Combine single payload bypassing it.
+ * Combine a single payload bypassing it.
  * 
  * @tparam Paradigm The paradigm to work under.
+ * @tparam PayloadT The type of the payload to bypass.
  * @return The resulting outcome. Just passes by the argument.
  */
 template < EParadigm Paradigm = EParadigm::Polite,
-		   typename T = void,
-		   typename std::enable_if<IsPayloadType<more::flatten_t<T>>(), int>::type = 0 >
+		   typename PayloadT = void,
+		   TPayloadTypeSecurity<std::decay_t<PayloadT>> = true >
 constexpr FORCEINLINE auto
-OutcomeCombine(T&& Payload)
+OutcomeCombine(PayloadT&& Payload)
 {
-	return MakeOutcome<Paradigm, more::flatten_t<T>, EApparatusStatus::Success>(std::forward<T>(Payload));
+	return MakeOutcome<Paradigm, PayloadT, EApparatusStatus::Success>(std::forward<PayloadT>(Payload));
 }
 
 /**
- * Combine two payloads as outcomes.
+ * Combine two payloads producing an outcome.
  * 
  * @tparam Paradigm The paradigm to work under.
- * @param PayloadA The first payload to combine.
- * @param PayloadB The second payload to combine.
+ * @tparam PayloadT The type of the first payload to combine.
+ * @tparam AnyPayloadT The type of the second payload to combine. Ignored.
+ * @param Payload The second payload to combine.
  * @return The resulting outcome. Just passes by the second payload.
  */
 template < EParadigm Paradigm = EParadigm::SafeHarsh,
-		   typename A = void, typename B = void,
-		   more::enable_if_t<(IsPayloadType<more::flatten_t<A>>()) &&
-							 (IsPayloadType<more::flatten_t<B>>()), int> = 0 >
+		   typename PayloadT = void, typename AnyPayloadT = void,
+		   TPayloadTypeSecurity<std::decay_t<AnyPayloadT>> = true,
+		   TPayloadTypeSecurity<PayloadT> = true >
 constexpr FORCEINLINE auto
-OutcomeCombine(A&& PayloadA, B&& PayloadB)
+OutcomeCombine(AnyPayloadT&&, const PayloadT& Payload)
 {
-	return MakeOutcome<Paradigm, more::flatten_t<B>, EApparatusStatus::Success>(std::forward<B>(PayloadB));
+	return MakeOutcome<Paradigm, PayloadT, EApparatusStatus::Success>(Payload);
+}
+
+/**
+ * Combine two payloads producing an outcome.
+ * Forwarding version.
+ * 
+ * @tparam Paradigm The paradigm to work under.
+ * @tparam PayloadT The type of the first payload to combine.
+ * @tparam AnyPayloadT The type of the second payload to combine. Ignored.
+ * @param Payload The second payload to combine.
+ * @return The resulting outcome. Just passes by the second payload.
+ */
+template < EParadigm Paradigm = EParadigm::SafeHarsh,
+		   typename PayloadT = void, typename AnyPayloadT = void,
+		   TPayloadTypeSecurity<std::decay_t<AnyPayloadT>> = true,
+		   TPayloadTypeSecurity<std::decay_t<PayloadT>> = true >
+constexpr FORCEINLINE auto
+OutcomeCombine(AnyPayloadT&&, PayloadT&& Payload)
+{
+	return MakeOutcome<Paradigm, PayloadT, EApparatusStatus::Success>(std::forward<PayloadT>(Payload));
 }
 
 #pragma endregion Payload + Payload
@@ -3705,65 +3735,65 @@ struct TOutcomeCombiner<A, THarshOutcome<B>>
 };
 
 /**
- * Combine a payload with a harsh empty outcome.
+ * Combine a payload with a harsh empty outcome producing a payload.
  * 
- * @tparam APayloadT The first outcome payload type.
+ * @tparam Paradigm The paradigm to work under.
+ * @tparam PayloadT The first outcome payload type.
  * @tparam T Harsh outcome type.
- * @param A The first payload to combine.
- * @param B The second outcome to combine.
- * @return The resulting harsh outcome.
- * Basically the same as the first argument,
- * since every harsh result is considered to be a success.
+ * @param Payload The first payload to combine.
+ * @return The resulting payload.
+ * Basically the same as the first argument.
  */
-template < typename APayloadT, typename T,
-		   typename std::enable_if<
-		   				IsPayloadType<typename more::flatten<APayloadT>::type>() && 
-		   				std::is_same<more::flatten_t<T>, THarshOutcome<void>>(), int>::type = 0 >
+template < EParadigm Paradigm = EParadigm::SafeHarsh,
+		   typename PayloadT, typename T,
+		   more::enable_if_t<
+		   		IsPayloadType<std::decay_t<PayloadT>>() &&
+		   		std::is_same<std::decay_t<T>, THarshOutcome<void>>(), bool> = true >
 constexpr FORCEINLINE auto
-OutcomeCombine(APayloadT&& A, T&& B)
+OutcomeCombine(PayloadT&& Payload, T&&)
 {
-	return std::forward<APayloadT>(A);
+	return std::forward<PayloadT>(Payload);
 }
 
 /**
  * Combine a payload with a harsh non-empty outcome.
  * Moving version.
  * 
- * @tparam APayloadT The first outcome payload type.
- * @param A The first payload to combine.
- * @param B The second outcome to combine.
+ * @tparam PayloadT The type of the payload.
+ * @tparam AnyPayloadT The first outcome payload type. Ignored.
+ * @param Outcome The harsh outcome to combine with.
  * @return The resulting harsh outcome.
  * Basically returns the second argument.
  */
-template < typename APayloadT,
-		   typename BPayloadT,
-		   typename std::enable_if<
-				IsPayloadType<more::flatten_t<APayloadT>>() &&
-				!std::is_void<BPayloadT>::value, int>::type = 0 >
+template < typename PayloadT,
+		   typename AnyPayloadT,
+		   more::enable_if_t<
+				IsPayloadType<std::decay_t<AnyPayloadT>>() &&
+				!std::is_void<PayloadT>::value, bool> = true >
 constexpr FORCEINLINE auto
-OutcomeCombine(APayloadT&& A, THarshOutcome<BPayloadT>&& B)
+OutcomeCombine(AnyPayloadT&&, THarshOutcome<PayloadT>&& Outcome)
 {
-	return B;
+	return MoveTempIfPossible(Outcome);
 }
 
 /**
  * Combine a payload with a harsh non-empty one.
  * 
- * @tparam APayloadT The first outcome payload type.
- * @param A The first payload to combine.
- * @param B The second outcome to combine.
+ * @tparam PayloadT The type of the payload to combine with.
+ * @tparam AnyPayloadT The first outcome payload type. Ignored.
+ * @param Outcome The second outcome to combine.
  * @return The resulting harsh outcome.
  * Basically returns the second argument.
  */
-template < typename APayloadT,
-		   typename BPayloadT,
-		   typename std::enable_if<
-				IsPayloadType<more::flatten_t<APayloadT>>() &&
-				!std::is_void<BPayloadT>::value, int>::type = 0 >
+template < typename PayloadT,
+		   typename AnyPayloadT,
+		   more::enable_if_t<
+				IsPayloadType<std::decay_t<AnyPayloadT>>() &&
+				!std::is_void<PayloadT>::value, bool> = true >
 constexpr FORCEINLINE auto
-OutcomeCombine(APayloadT&& A, const THarshOutcome<BPayloadT>& B)
+OutcomeCombine(AnyPayloadT&&, const THarshOutcome<PayloadT>& Outcome)
 {
-	return B;
+	return Outcome;
 }
 
 #pragma endregion Payload + Harsh
@@ -4765,7 +4795,7 @@ using TOutcomeIfUnsafeOr = TEnableIfUnsafeOr<Paradigm, Condition, TOutcome<Parad
 		const auto _Outcome##__LINE__ = (Outcome);           \
 		verifyf(OK(_Outcome##__LINE__),                      \
 				TEXT("Verifying has failed with error: %s"), \
-				*ToString(_Outcome##__LINE__));              \
+				*(::ToString(_Outcome##__LINE__)));          \
 	}())
 
 /**

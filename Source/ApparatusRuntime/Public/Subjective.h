@@ -1050,7 +1050,7 @@ class APPARATUSRUNTIME_API ISubjective
 	FORCEINLINE bool
 	Matches(const FFilter& InFilter) const
 	{
-		const FFingerprint& Fingerprint = GetFingerprint();
+		const auto& Fingerprint = GetFingerprint();
 		return Fingerprint.Matches(InFilter);
 	}
 
@@ -1420,6 +1420,28 @@ class APPARATUSRUNTIME_API ISubjective
 	}
 
 	/**
+	 * Get a trait from the subjective by its type.
+	 * Statically typed reference version.
+	 *
+	 * If the trait is missing within the subject,
+	 * the output data is unchanged and EApparatusStatus::Missing is returned.
+	 * 
+	 * @tparam T The type of the trait to get.
+	 * @tparam Paradigm The paradigm to work under.
+	 * @param[out] OutTrait The trait receiver.
+	 * @param[in] bTraitDataInitialized Is the @p OutTrait actually initialized?
+	 * @return The outcome of the operation.
+	 * @return EApparatusStatus::Missing If there is no such trait in the subject.
+	 */
+	template < typename T, EParadigm Paradigm = EParadigm::Default,
+			   TTraitTypeSecurity<T> = true >
+	FORCEINLINE TOutcome<Paradigm>
+	GetTrait(T& OutTrait, const bool bTraitDataInitialized = true) const
+	{
+		return GetTrait<Paradigm, T>(OutTrait, bTraitDataInitialized);
+	}
+
+	/**
 	 * Get a copy of a trait from the subjective by its type.
 	 * Statically typed version.
 	 * 
@@ -1433,19 +1455,19 @@ class APPARATUSRUNTIME_API ISubjective
 	GetTrait() const
 	{
 		T TraitTemp;
-		if (AvoidError(Paradigm, GetTrait(TraitTemp)))
+		if (AvoidError(Paradigm, GetTrait<Paradigm>(TraitTemp)))
 		{
 			return MakeOutcome<Paradigm, T>(FApparatusStatus::GetLastError(), MoveTempIfPossible(TraitTemp));
 		}
-		return GetTrait<Paradigm, T>(EApparatusStatus::Success, MoveTempIfPossible(TraitTemp));
+		return MoveTempIfPossible(TraitTemp);
 	}
 
 	/**
 	 * Get a copy of a trait from the subjective by its type.
 	 * Statically typed version.
 	 * 
-	 * @tparam Paradigm The paradigm to work under.
 	 * @tparam T The type of the trait to get.
+	 * @tparam Paradigm The paradigm to work under.
 	 * @return The copy of the trait.
 	 */
 	template < typename T,
@@ -1822,9 +1844,11 @@ class APPARATUSRUNTIME_API ISubjective
 	 * @param bIncludeDisabled Should disabled details be included?
 	 * @param OutDetails An array to store the details in.
 	 */
-	void
-	GetDetails(const bool        bIncludeDisabled,
-			   TArray<UDetail*>& OutDetails) const;
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator >
+	TOutcome<Paradigm>
+	GetDetails(const bool                    bIncludeDisabled,
+			   TArray<UDetail*, AllocatorT>& OutDetails) const;
 
 	/**
 	 * Get all the enabled details of the subjective.
@@ -1832,10 +1856,13 @@ class APPARATUSRUNTIME_API ISubjective
 	 * @param OutDetails An array to store the details in.
 	 * @param bIncludeDisabled Should disabled details be included?
 	 */
-	FORCEINLINE void
-	GetDetails(TArray<UDetail*>& OutDetails, const bool bIncludeDisabled = false) const
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator >
+	FORCEINLINE auto
+	GetDetails(TArray<UDetail*, AllocatorT>& OutDetails,
+			   const bool                    bIncludeDisabled = false) const
 	{
-		GetDetails(bIncludeDisabled, OutDetails);
+		return GetDetails<Paradigm>(bIncludeDisabled, OutDetails);
 	}
 
 	// TODO: Remove the deprecated method.
@@ -1984,7 +2011,8 @@ class APPARATUSRUNTIME_API ISubjective
 	 * @param[out] OutDetails The output array to store the details in.
 	 * @param[in] bIncludeDisabled Should disabled details be collected.
 	 */
-	template < EParadigm Paradigm = EParadigm::Default, typename AllocatorT = FDefaultAllocator >
+	template < EParadigm Paradigm   = EParadigm::Default, 
+			   typename  AllocatorT = FDefaultAllocator >
 	TOutcome<Paradigm>
 	CollectDetails(TSubclassOf<UDetail>          DetailClass,
 				   TArray<UDetail*, AllocatorT>& OutDetails,
@@ -2061,7 +2089,8 @@ class APPARATUSRUNTIME_API ISubjective
 	 * @param[out] OutDetails The output array to store the details in.
 	 * @param[in] bIncludeDisabled Should disabled details be collected.
 	 */
-	template < EParadigm Paradigm = EParadigm::Default, typename AllocatorT = FDefaultAllocator >
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator >
 	TOutcome<Paradigm>
 	GetDetails(TSubclassOf<UDetail>          DetailClass,
 			   TArray<UDetail*, AllocatorT>& OutDetails,
@@ -2083,8 +2112,10 @@ class APPARATUSRUNTIME_API ISubjective
 	 * @param[out] OutDetails The output array to store the details in.
 	 * @param[in] bIncludeDisabled Should disabled details be collected.
 	 */
-	template < class D, typename AllocatorT >
-	typename std::enable_if<IsDetailClass<D>(), void>::type
+	template < EParadigm Paradigm = EParadigm::Default,
+			   class D = UDetail, typename AllocatorT = FDefaultAllocator,
+			   TDetailClassSecurity<D> = true >
+	TOutcome<Paradigm>
 	GetDetails(TArray<D*, AllocatorT>& OutDetails,
 			   const bool              bIncludeDisabled = false) const
 	{
@@ -2092,12 +2123,12 @@ class APPARATUSRUNTIME_API ISubjective
 
 		if (UNLIKELY(!IsValidSubjective(this)))
 		{
-			return;
+			return EApparatusStatus::InvalidState;
 		}
 		// A fast check for the detail in the fingerprint...
-		if (!bIncludeDisabled && !GetFingerprint().Contains(D::StaticClass()))
+		if (!bIncludeDisabled && !GetFingerprint().template Contains<D>())
 		{
-			return;
+			return EApparatusStatus::NoItems;
 		}
 
 		// Search within the details array now...
@@ -2113,7 +2144,8 @@ class APPARATUSRUNTIME_API ISubjective
 				{
 					if (UNLIKELY(!Detail))
 						continue;
-					OutDetails.Add(Detail);
+					const auto CastDetail = ::template CastChecked<D>(Detail);
+					OutDetails.Add(CastDetail);
 				}
 			}
 			else
@@ -2124,7 +2156,8 @@ class APPARATUSRUNTIME_API ISubjective
 						continue;
 					if (!Detail->IsEnabled())
 						continue;
-					OutDetails.Add(Detail);
+					const auto CastDetail = ::template CastChecked<D>(Detail);
+					OutDetails.Add(CastDetail);
 				}
 			}
 		}
@@ -2132,17 +2165,19 @@ class APPARATUSRUNTIME_API ISubjective
 		{
 			for (UDetail* const Detail : Details)
 			{
-				if (UNLIKELY(!Detail))
+				if (UNLIKELY(Detail == nullptr))
 					continue;
 				if (!bIncludeDisabled && !Detail->IsEnabled())
 					continue;
 				const auto CastDetail = ::template Cast<D>(Detail);
-				if (CastDetail)
+				if (CastDetail != nullptr)
 				{
 					OutDetails.Add(CastDetail);
 				}
 			}
 		}
+
+		return OutDetails.Num() > 0 ? EApparatusStatus::Success : EApparatusStatus::NoItems;
 	}
 
 	// TODO: Remove the deprecated method.
@@ -2252,7 +2287,7 @@ class APPARATUSRUNTIME_API ISubjective
 	template < EParadigm Paradigm = EParadigm::Default >
 	TOutcome<Paradigm, UDetail*>
 	AddDetail(const TSubclassOf<UDetail> DetailClass,
-			  const bool           		 bReuseDisabled = false);
+			  const bool           		 bReuseDisabled = true);
 
 	/**
 	 * Add a new active detail or reuse an inactive one.
@@ -2264,9 +2299,10 @@ class APPARATUSRUNTIME_API ISubjective
 	 * @param bReuseDisabled Should disabled details be reused instead of adding a new one?
 	 * @return The newly added detail.
 	 */
-	template < EParadigm Paradigm, class D >
-	FORCEINLINE TOutcomeIf<Paradigm, IsDetailClass<D>(), D*>
-	AddDetail(const bool bReuseDisabled = false)
+	template < EParadigm Paradigm, class D,
+			   TDetailClassSecurity<D> = true >
+	FORCEINLINE TOutcome<Paradigm, D*>
+	AddDetail(const bool bReuseDisabled = true)
 	{
 		return OutcomeStaticCast<D*>(AddDetail<Paradigm>(D::StaticClass(), bReuseDisabled));
 	}
@@ -2283,7 +2319,7 @@ class APPARATUSRUNTIME_API ISubjective
 	 */
 	template < class D, EParadigm Paradigm = EParadigm::Default >
 	FORCEINLINE TOutcomeIf<Paradigm, IsDetailClass<D>(), D*>
-	AddDetail(const bool bReuseDisabled = false)
+	AddDetail(const bool bReuseDisabled = true)
 	{
 		return AddDetail<Paradigm, D>(bReuseDisabled);
 	}
@@ -2917,12 +2953,14 @@ ISubjective::MarkBooted()
 	return Handle.MarkBooted();
 }
 
-inline void
-ISubjective::GetDetails(const bool        bIncludeDisabled,
-						TArray<UDetail*>& OutDetails) const
+template < EParadigm Paradigm/*=EParadigm::Default*/,
+		   typename  AllocatorT/*=FDefaultAllocator*/ >
+inline TOutcome<Paradigm>
+ISubjective::GetDetails(const bool                    bIncludeDisabled,
+						TArray<UDetail*, AllocatorT>& OutDetails) const
 {
 	OutDetails.Reset();
-	if (bIncludeDisabled)
+	if (UNLIKELY(bIncludeDisabled))
 	{
 		OutDetails.Append(GetDetailsRef());
 	}
@@ -2938,6 +2976,7 @@ ISubjective::GetDetails(const bool        bIncludeDisabled,
 			OutDetails.Add(Detail);
 		}
 	}
+	return OutDetails.Num() > 0 ? EApparatusStatus::Success : EApparatusStatus::NoItems;
 }
 
 inline bool
@@ -3510,17 +3549,23 @@ class APPARATUSRUNTIME_API ISolidSubjective
 
 	/**
 	 * Get the details of the subjective.
+	 * Statically-typed version.
 	 * 
+	 * @tparam Paradigm The paradigm to work under.
 	 * @tparam D The type of details to get.
+	 * @tparam AllocatorT The type of the allocator for the details array.
 	 * @param OutDetails An array to store the details in.
 	 * @param bIncludeDisabled Should disabled details be included?
 	 */
-	template < class D >
-	FORCEINLINE typename std::enable_if<IsDetailClass<D>(), void>::type
-	GetDetails(TArray<D*>& OutDetails,
-			   const bool  bIncludeDisabled = false) const
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   class     D          = UDetail,
+			   typename  AllocatorT = FDefaultAllocator,
+			   TDetailClassSecurity<D> = true >
+	FORCEINLINE auto
+	GetDetails(TArray<D*, AllocatorT>& OutDetails,
+			   const bool              bIncludeDisabled = false) const
 	{
-		ISubjective::template GetDetails<D>(OutDetails, bIncludeDisabled);
+		return ISubjective::template GetDetails<Paradigm, D>(OutDetails, bIncludeDisabled);
 	}
 
 	/**
@@ -3529,22 +3574,28 @@ class APPARATUSRUNTIME_API ISolidSubjective
 	 * @param bIncludeDisabled Should disabled details be included?
 	 * @param OutDetails An array to store the details in.
 	 */
-	FORCEINLINE void
-	GetDetails(const bool        bIncludeDisabled,
-			   TArray<UDetail*>& OutDetails) const
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator >
+	FORCEINLINE auto
+	GetDetails(const bool                    bIncludeDisabled,
+			   TArray<UDetail*, AllocatorT>& OutDetails) const
 	{
-		ISubjective::GetDetails(bIncludeDisabled, OutDetails);
+		return ISubjective::template GetDetails<Paradigm>(bIncludeDisabled, OutDetails);
 	}
 
 	/**
 	 * Get all the enabled details of the subjective.
 	 * 
 	 * @param OutDetails An array to store the details in.
+	 * @param bIncludeDisabled Should disabled details be included.
 	 */
-	FORCEINLINE void
-	GetDetails(TArray<UDetail*>& OutDetails) const
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator >
+	FORCEINLINE auto
+	GetDetails(TArray<UDetail*, AllocatorT>& OutDetails,
+			   const bool                    bIncludeDisabled = false) const
 	{
-		ISubjective::GetDetails(OutDetails);
+		return ISubjective::template GetDetails<Paradigm>(OutDetails, bIncludeDisabled);
 	}
 
 	// TODO: Remove the deprecated method.
@@ -3553,6 +3604,7 @@ class APPARATUSRUNTIME_API ISolidSubjective
 	 * 
 	 * Supports searching by a base class.
 	 */
+	[[deprecated]]
 	FORCEINLINE void
 	FindDetails(TSubclassOf<UDetail> DetailClass,
 				TArray<UDetail*>&    OutDetails,
@@ -3566,12 +3618,14 @@ class APPARATUSRUNTIME_API ISolidSubjective
 	 * 
 	 * Supports searching by a base class.
 	 */
-	FORCEINLINE void
-	GetDetails(TSubclassOf<UDetail> DetailClass,
-			   TArray<UDetail*>&    OutDetails,
-			   const bool           bIncludeDisabled = false) const
+	template < EParadigm Paradigm   = EParadigm::Default,
+			   typename  AllocatorT = FDefaultAllocator >
+	FORCEINLINE auto
+	GetDetails(TSubclassOf<UDetail>          DetailClass,
+			   TArray<UDetail*, AllocatorT>& OutDetails,
+			   const bool                    bIncludeDisabled = false) const
 	{
-		ISubjective::GetDetails(DetailClass, OutDetails, bIncludeDisabled);
+		return ISubjective::template GetDetails<Paradigm>(DetailClass, OutDetails, bIncludeDisabled);
 	}
 
 	/**

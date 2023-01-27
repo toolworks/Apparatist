@@ -46,6 +46,7 @@ class APPARATUSRUNTIME_API AMechanicalGameMode
 	friend class ISubjective;
 
   public:
+
 	/**
 	 * Construct a new mechanism.
 	 */
