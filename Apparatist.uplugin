@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "0.1.0",
+	"VersionName": "0.2.0",
 	"FriendlyName": "Apparatist",
 	"Description": "Official Apparatus utility toolkit.",
 	"Category": "Workflow",
@@ -19,8 +19,12 @@
 		{
 			"Name": "ApparatistRuntime",
 			"Type": "Runtime",
-			"LoadingPhase": "PreDefault",
-			"WhitelistPlatforms": [ "Win64", "Win32", "Linux", "Mac", "IOS", "Android" ]
+			"LoadingPhase": "PreDefault"
+		},
+		{
+			"Name": "ApparatistEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
 		}
 	],
 	"Plugins": [

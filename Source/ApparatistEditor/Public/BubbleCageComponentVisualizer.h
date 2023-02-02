@@ -1,8 +1,8 @@
 /*
  * ░▒▓ APPARATIST ▓▒░
  * 
- * File: ApparatistRuntime.Build.cs
- * Created: 2022-01-21 12:49:43
+ * File: BubbleCageComponentVisualizer.h
+ * Created: 2023-02-02 14:36:16
  * Author: Vladislav Dmitrievich Turbanov (vladislav@turbanov.ru)
  * ───────────────────────────────────────────────────────────────────
  * 
@@ -12,16 +12,16 @@
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 
-using UnrealBuildTool;
+#pragma once
 
-public class ApparatistRuntime : ModuleRules
+#include "ComponentVisualizer.h"
+
+
+class APPARATISTEDITOR_API FBubbleCageComponentVisualizer
+  : public FComponentVisualizer
 {
-    public ApparatistRuntime(ReadOnlyTargetRules Target) : base(Target)
-    {
-        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-
-        PublicDependencyModuleNames.AddRange(new string[] {
-            "Core", "CoreUObject", "Engine",
-            "ApparatusRuntime" });
-    }
-}
+  private:
+	
+	void
+	DrawVisualization(const UActorComponent* Component, const FSceneView* View, FPrimitiveDrawInterface* PDI) override;
+};
