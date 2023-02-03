@@ -1,0 +1,97 @@
+#main-menu {
+	background-image: none;
+	background-color: #D0858B;
+}
+
+.sm-dox a span.sub-arrow
+{
+	border-top-color: white;
+}
+
+.sm-dox a  {
+	font-family: "Montserrat", "Lucida Grande", "Geneva", "Helvetica", Arial, sans-serif;
+	background-image: none;
+	background-color: #D0858B;
+	color: white;
+	text-shadow: 0px -0.35px 1px rgba(0,0,0, 0.75);
+}
+
+.sm-dox a:hover
+{
+	font-family: "Montserrat", "Lucida Grande", "Geneva", "Helvetica", Arial, sans-serif;
+	background-image: none;
+	background-color: #DFB0B4;
+	color: white;
+	text-shadow: 0px -0.35px 1px rgba(0,0,0, 0.75);
+}
+
+.sm-dox a:focus
+{
+	font-family: "Montserrat", "Lucida Grande", "Geneva", "Helvetica", Arial, sans-serif;
+	background-image: none;
+	background-color: #cf666f;
+	color: white;
+	text-shadow: 0px -0.35px 1px rgba(0,0,0, 0.75);
+}
+
+.sm-dox a:active
+{
+	font-family: "Montserrat", "Lucida Grande", "Geneva", "Helvetica", Arial, sans-serif;
+	background-color: #A73740;
+	color: white;
+	text-shadow: 0px -0.35px 1px rgba(0,0,0, 0.75);
+}
+
+.sm-dox ul a
+{
+	background-color: #697E70;
+	text-shadow: 0px -0.35px 1px rgba(0,0,0, 0.75);
+}
+
+.sm-dox ul a:focus
+{
+	background-color: #547e62;
+	text-shadow: 0px -0.35px 1px rgba(0,0,0, 0.75);
+}
+
+.sm-dox ul a:hover
+{
+	background-color: #a6b6ab;
+	text-shadow: 0px -0.35px 1px rgba(0,0,0, 0.75);
+}
+
+.sm-dox ul li a
+{
+	background-color: white;
+	text-shadow: none;
+}
+
+@media screen and (prefers-color-scheme: dark)
+{
+	.sm-dox ul li a
+	{
+		background-color: black;
+		text-shadow: none;
+	}
+}
+
+address.footer
+{
+	text-align: center;
+}
+
+hr.footer
+{
+	height: 1px;
+	color: #697e70
+}
+
+#projectbrief
+{
+	font: 120% "Montserrat", Tahoma, Arial,sans-serif;
+	color: #CCC;
+	margin: 0px;
+	margin-top: 10px;
+	padding: 0px;
+	margin-bottom: 5px;
+}

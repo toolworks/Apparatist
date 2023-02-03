@@ -1,0 +1,35 @@
+{
+	"FileVersion": 3,
+	"Version": 33,
+	"VersionName": "1.23.1",
+	"FriendlyName": "Apparatus",
+	"Description": "Native ECS data-oriented workflow.",
+	"Category": "Workflow",
+	"CreatedBy": "SP Vladislav Dmitrievich Turbanov",
+	"CreatedByURL": "https://turbanov.ru",
+	"DocsURL": "https://turbanov.ru/wiki/en/toolworks/docs/apparatus",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/66d674e3675f44c1a1e619de8adcef71",
+	"SupportURL": "https://talk.turbanov.ru",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "ApparatusRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "PreDefault"
+		},
+		{
+			"Name": "ApparatusUncooked",
+			"Type": "UncookedOnly",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "ApparatusEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}

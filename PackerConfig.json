@@ -1,0 +1,7 @@
+{
+    "EngineVersions": [
+        "4.26", "4.27", "5.0", "5.1"
+    ],
+    "AllowedRuntimePlatforms": [ "Win32", "Win64", "Linux", "Mac", "Android", "IOS", "Switch", "PS4", "XboxOne" ],
+    "AllowedEditorPlatforms": [ "Win64", "Linux", "Mac" ]
+}

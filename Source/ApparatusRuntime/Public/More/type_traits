@@ -1,0 +1,247 @@
+/*
+ * ░▒▓ APPARATUS ▓▒░
+ * 
+ * File: type_traits
+ * Created: 2022-01-04 17:13:43
+ * Author: Vladislav Dmitrievich Turbanov (vladislav@turbanov.ru)
+ * ───────────────────────────────────────────────────────────────────
+ * 
+ * The Apparatus source code is for your internal usage only.
+ * Redistribution of this file is strictly prohibited.
+ * 
+ * Community forums: https://talk.turbanov.ru
+ * 
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
+ * Made in Russia, Moscow City, Chekhov City ♡
+ */
+/**
+ * @file 
+ * @brief Additional type traits functionality.
+ */
+
+#pragma once
+
+#include <type_traits>
+
+namespace more
+{
+	/**
+	 * Enabled type synonym.
+	 * 
+	 * @tparam B The state.
+	 * @tparam T The type to provide.
+	 */
+	template < bool B, typename T = void >
+	using enable_if_t = typename std::enable_if<B, T>::type;
+
+	/**
+	 * The type of the array element.
+	 * 
+	 * @tparam A The type of the array.
+	 */
+	template < class A >
+	using array_element_t = std::decay_t<decltype(std::declval<A>()[0])>;
+
+	/**
+	 * The value type of the array element.
+	 * 
+	 * @tparam A The type of the array.
+	 */
+	template < class A >
+	using array_value_t = std::remove_reference_t<decltype(std::declval<A>()[0])>;
+
+	/**
+	 * Flatten the type completely removing
+	 * any of the additional specifiers, including pointers,
+	 * references, consts, etc.
+	 * 
+	 * @tparam T The type to reduce.
+	 */
+	template < typename T >
+	struct flatten : std::template decay<typename std::template remove_pointer<T>::type>
+	{};
+
+	/**
+	 * Flattened type synonym.
+	 * 
+	 * @tparam T The type to reduce.
+	 */
+	template < typename T >
+	using flatten_t = typename flatten<T>::type;
+
+	/**
+	 * Compare a flattened version of a type to a type.
+	 */
+	template < typename T, typename U >
+	struct is_same_flatly
+	 : std::template is_same<typename flatten<T>::type, typename flatten<U>::type>
+	{};
+
+	/**
+	 * Check if the class is a base of another class while
+	 * omitting all the additional type specifiers.
+	 */
+	template < typename B, typename D >
+	struct is_base_of_flatly
+	 : std::template is_base_of<typename flatten<B>::type, typename flatten<D>::type>
+	{};
+
+	/**
+	 * Find an index of a certain type among
+	 * variadic types.  
+	 */
+	template < typename... Ts >
+	struct index_within;
+
+	// The index is right there.
+	template < typename T >
+	struct index_within<T, T>
+	  : std::integral_constant<int, 0>
+	{};
+
+	// The index was found.
+	template < typename T, typename... Tail >
+	struct index_within<T, T, Tail...>
+	  : std::integral_constant<int, 0>
+	{};
+
+	// Index was not found.
+	template < typename T, typename F >
+	struct index_within<T, F>
+	  : std::integral_constant<int, -1>
+	{};
+
+	// Only a single argument - still considered not found.
+	template < typename T >
+	struct index_within<T>
+	  : std::integral_constant<int, -1>
+	{};
+
+	// Searching for the index.
+	template < typename T, typename F, typename... Tail >
+	struct index_within<T, F, Tail...>
+	  : std::integral_constant<int, 1 + index_within<T, Tail...>::value>
+	{};
+
+	/**
+	 * Find an index of a certain type among
+	 * variadic types flattened.  
+	 */
+	template < typename ...Ts >
+	struct index_within_flatly
+	  : index_within<typename flatten<Ts>::type ...>
+	{};
+
+	/**
+	 * Check if a certain type is contained within the variadic list
+	 * of types. Does not support type inheritance.
+	 * 
+	 * @tparam T The type to check. 
+	 * @tparam List The list to check against.
+	 */
+	template <typename T, typename... List>
+	struct is_contained;
+
+	template <typename T, typename Head, typename... Tail>
+	struct is_contained<T, Head, Tail...>
+	{
+		enum { value = std::is_same<T, Head>::value || is_contained<T, Tail...>::value };
+	};
+
+	template <typename T>
+	struct is_contained<T>
+	{
+		enum { value = false };
+	};
+
+	/**
+	 * Check if a certain type is contained within the variadic list
+	 * of types. Supports type inheritance.
+	 * 
+	 * @tparam T The type to check. May be a base class.
+	 * @tparam List The list to check against.
+	 */
+	template <typename T, typename... List>
+	struct is_base_contained;
+
+	template <typename T, typename Head, typename... Tail>
+	struct is_base_contained<T, Head, Tail...>
+	{
+		enum { value = std::is_base_of<T, Head>::value || is_base_contained<T, Tail...>::value };
+	};
+
+	template <typename T>
+	struct is_base_contained<T>
+	{
+		enum { value = false };
+	};
+
+	/**
+	 * Check if a certain type is contained within the variadic list
+	 * of types in a flat manner.
+	 * 
+	 * @tparam T The type to check.
+	 * @tparam List The list to check against.
+	 */
+	template <typename T, typename... List>
+	struct is_contained_flatly;
+
+	// Recursive comparison:
+	template <typename T, typename Head, typename... Tail>
+	struct is_contained_flatly<T, Head, Tail...>
+	{
+		enum { value = is_same_flatly<T, Head>::value || is_contained_flatly<T, Tail...>::value };
+	};
+
+	// Empty list:
+	template <typename T>
+	struct is_contained_flatly<T>
+	{
+		enum { value = false };
+	};
+
+	/**
+	 * Check if a certain base type is contained within the variadic list
+	 * of types in a flat manner.
+	 * 
+	 * @tparam T The base type to check for.
+	 * @tparam List The list to check against.
+	 */
+	template <typename T, typename... List>
+	struct is_base_contained_flatly;
+
+	// Recursive comparison:
+	template <typename T, typename Head, typename... Tail>
+	struct is_base_contained_flatly<T, Head, Tail...>
+	{
+		enum { value = is_base_of_flatly<T, Head>::value || is_base_contained_flatly<T, Tail...>::value };
+	};
+
+	// Empty list version:
+	template <typename T>
+	struct is_base_contained_flatly<T>
+	{
+		enum { value = false };
+	};
+
+	/**
+	 * Check if a variadic list of types has any duplicates within itself.
+	 * 
+	 * @tparam List The list of types to examine.
+	 */
+	template <typename... List>
+	struct has_duplicates;
+
+	template <typename Head, typename... Tail>
+	struct has_duplicates<Head, Tail...>
+	{
+		enum { value = is_contained<Head, Tail...>::value || has_duplicates<Tail...>::value };
+	};
+
+	template <>
+	struct has_duplicates<>
+	{
+		enum { value = false };
+	};
+
+} //-namespace more
