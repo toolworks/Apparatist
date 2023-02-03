@@ -257,11 +257,17 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	/**
 	 * Get overlapping spheres for the specified location.
 	 */
+	UFUNCTION(BlueprintCallable)
 	int32
 	GetOverlapping(const FVector&          Location,
 				   const float             Radius,
 				   TArray<FSubjectHandle>& OutOverlappers) const
 	{
+		if (UNLIKELY(Radius == 0))
+		{
+			return GetOverlapping(Location, OutOverlappers);
+		}
+
 		OutOverlappers.Reset();
 		const auto Range = FVector(Radius + LargestRadius);
 		const auto CagePosMin = WorldToCage(Location - Range);

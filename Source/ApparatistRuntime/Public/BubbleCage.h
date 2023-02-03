@@ -69,7 +69,48 @@ class APPARATISTRUNTIME_API ABubbleCage
 		return Instance;
 	}
 
+	/**
+	 * Get the actual bubble cage component.
+	 */
+	auto
+	GetComponent()
+	{
+		return BubbleCageComponent;
+	}
+
 	ABubbleCage();
+
+	/**
+	 * Get overlapping spheres for the specified location.
+	 */
+	static int32
+	GetOverlapping(const FVector&          Location,
+				   TArray<FSubjectHandle>& OutOverlappers)
+	{
+		if (LIKELY(Instance != nullptr && Instance->BubbleCageComponent != nullptr))
+		{
+			return Instance->BubbleCageComponent->GetOverlapping(Location, OutOverlappers);
+		}
+		OutOverlappers.Reset();
+		return 0;
+	}
+
+	/**
+	 * Get overlapping spheres for the specified location.
+	 */
+	UFUNCTION(BlueprintCallable)
+	static int32
+	GetOverlapping(const FVector&          Location,
+				   const float             Radius,
+				   TArray<FSubjectHandle>& OutOverlappers)
+	{
+		if (LIKELY(Instance != nullptr && Instance->BubbleCageComponent != nullptr))
+		{
+			return Instance->BubbleCageComponent->GetOverlapping(Location, Radius, OutOverlappers);
+		}
+		OutOverlappers.Reset();
+		return 0;
+	}
 
 	/**
 	 * Re-fill the cage with bubbles.
