@@ -9,7 +9,6 @@
 	"CreatedByURL": "https://turbanov.ru",
 	"DocsURL": "https://github.com/toolworks/Apparatist",
 	"SupportURL": "https://github.com/toolworks/Apparatist",
-	"EngineVersion": "4.27.0",
 	"EnabledByDefault": true,
 	"CanContainContent": false,
 	"IsBetaVersion": true,
