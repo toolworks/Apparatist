@@ -1,8 +1,8 @@
 /*
  * ░▒▓ APPARATIST ▓▒░
  * 
- * File: ApparatistRuntime.Build.cs
- * Created: 2022-01-21 12:49:43
+ * File: BubbleCageComponent.h
+ * Created: 2023-02-02 16:26:26
  * Author: Vladislav Dmitrievich Turbanov (vladislav@turbanov.ru)
  * ───────────────────────────────────────────────────────────────────
  * 
@@ -12,16 +12,18 @@
  * Made in Russia, Moscow City, Chekhov City ♡
  */
 
-using UnrealBuildTool;
+#include "BubbleCageComponent.h"
 
-public class ApparatistRuntime : ModuleRules
+
+UBubbleCageComponent::UBubbleCageComponent()
 {
-    public ApparatistRuntime(ReadOnlyTargetRules Target) : base(Target)
-    {
-        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+	bWantsInitializeComponent = true;
+}
 
-        PublicDependencyModuleNames.AddRange(new string[] {
-            "Core", "CoreUObject", "Engine",
-            "ApparatusRuntime" });
-    }
+void
+UBubbleCageComponent::InitializeComponent()
+{
+	DoInitializeCells();
+	GetBounds();
+	bInitialized = true;
 }

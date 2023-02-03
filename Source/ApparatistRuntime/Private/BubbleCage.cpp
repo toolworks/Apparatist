@@ -1,23 +1,27 @@
-// 2022 Vladislav Dmitrievich Turbanov
+/*
+ * ░▒▓ APPARATIST ▓▒░
+ * 
+ * File: BubbleCage.cpp
+ * Created: 2022-01-21 12:53:42
+ * Author: Vladislav Dmitrievich Turbanov (vladislav@turbanov.ru)
+ * ───────────────────────────────────────────────────────────────────
+ * 
+ * Community forums: https://talk.turbanov.ru
+ * 
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
+ * Made in Russia, Moscow City, Chekhov City ♡
+ */
 
 #include "BubbleCage.h"
 
 
 ABubbleCage* ABubbleCage::Instance = nullptr;
 
-/* Sets default values. */
 ABubbleCage::ABubbleCage()
 {
 	PrimaryActorTick.bCanEverTick = false;
-}
-
-/* Called when the game starts or when spawned. */
-void ABubbleCage::InitializeInternalState()
-{
-	Cells.Reset();
-	if (ensure((int64)Size.X * (int64)Size.Y * (int64)Size.Z < (int64)TNumericLimits<int32>::Max()))
-	{
-		Cells.AddDefaulted(Size.X * Size.Y * Size.Z);
-	}
-	FlushPersistentDebugLines(GetWorld());
+	const auto SceneComponent = CreateDefaultSubobject<USceneComponent>("SceneComponent");
+	BubbleCageComponent = CreateDefaultSubobject<UBubbleCageComponent>("BubbleCage");
+	SceneComponent->Mobility = EComponentMobility::Static;
+	RootComponent = SceneComponent;
 }

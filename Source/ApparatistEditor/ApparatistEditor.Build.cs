@@ -1,8 +1,8 @@
 /*
  * ░▒▓ APPARATIST ▓▒░
  * 
- * File: ApparatistRuntime.Build.cs
- * Created: 2022-01-21 12:49:43
+ * File: ApparatistEditor.Build.cs
+ * Created: 2023-02-02 14:21:52
  * Author: Vladislav Dmitrievich Turbanov (vladislav@turbanov.ru)
  * ───────────────────────────────────────────────────────────────────
  * 
@@ -14,14 +14,14 @@
 
 using UnrealBuildTool;
 
-public class ApparatistRuntime : ModuleRules
+public class ApparatistEditor : ModuleRules
 {
-    public ApparatistRuntime(ReadOnlyTargetRules Target) : base(Target)
+    public ApparatistEditor(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-        PublicDependencyModuleNames.AddRange(new string[] {
-            "Core", "CoreUObject", "Engine",
-            "ApparatusRuntime" });
+        PublicDependencyModuleNames.AddRange(new string[] { "Core", "Engine", "CoreUObject", "ApparatistRuntime" });
+
+        PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd" });
     }
 }
