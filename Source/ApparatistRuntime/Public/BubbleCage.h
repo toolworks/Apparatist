@@ -98,6 +98,20 @@ class APPARATISTRUNTIME_API ABubbleCage
 	/**
 	 * Get overlapping spheres for the specified location.
 	 */
+	static TArray<FSubjectHandle>
+	GetOverlapping(const FVector& Location,
+				   const float    Radius)
+	{
+		if (LIKELY(Instance != nullptr && Instance->BubbleCageComponent != nullptr))
+		{
+			return Instance->BubbleCageComponent->GetOverlapping(Location, Radius);
+		}
+		return TArray<FSubjectHandle>();
+	}
+
+	/**
+	 * Get overlapping spheres for the specified location.
+	 */
 	UFUNCTION(BlueprintCallable)
 	static int32
 	GetOverlapping(const FVector&          Location,
