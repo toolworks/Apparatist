@@ -1709,7 +1709,7 @@ class APPARATUSRUNTIME_API ISubjective
 	 * @return A pointer to the constant trait's data.
 	 */
 	template < EParadigm Paradigm, typename T,
-			   TTraitTypesSecurity<T> = true,
+			   TTraitTypeSecurity<T> = true,
 			   more::enable_if_t<IsUnsafe(Paradigm), bool> = true >
 	FORCEINLINE const T*
 	GetTraitPtr(const bool bExact = false) const
@@ -1730,7 +1730,7 @@ class APPARATUSRUNTIME_API ISubjective
 	 * @return A pointer to the trait's data.
 	 */
 	template < EParadigm Paradigm, typename T,
-			   TTraitTypesSecurity<T> = true,
+			   TTraitTypeSecurity<T> = true,
 			   more::enable_if_t<IsUnsafe(Paradigm), bool> = true >
 	FORCEINLINE T*
 	GetTraitPtr(const bool bExact = false)

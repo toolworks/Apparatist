@@ -216,18 +216,15 @@ class APPARATUSRUNTIME_API AMechanism
 	 */
 	static constexpr int32 FoundIterablesInlineSize = 32;
 
-	enum
-	{
-		/**
-		 * Invalid chain identifier.
-		 */
-		InvalidChainId = FChain::InvalidId,
+	/**
+	 * Invalid chain identifier.
+	 */
+	static constexpr auto InvalidChainId = FChain::InvalidId;
 
-		/**
-		 * First valid chain identifier.
-		 */
-		FirstChainId = FChain::FirstId
-	};
+	/**
+	 * First valid chain identifier.
+	 */
+	static constexpr auto FirstChainId = FChain::FirstId;
 
 	/**
 	 * A safe applicator for the

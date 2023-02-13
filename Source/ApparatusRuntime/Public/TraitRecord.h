@@ -534,7 +534,7 @@ struct APPARATUSRUNTIME_API FTraitRecord
 		if (Archive.IsLoading())
 		{
 			// Destroy the existing state completely...
-			DoDestroyData();
+			DoDestroyData(/*bFree=*/false);
 			Type = nullptr;
 		}
 
@@ -579,7 +579,7 @@ struct APPARATUSRUNTIME_API FTraitRecord
 
 			if (UNLIKELY(Type == nullptr))
 			{
-				if (TraitSize > 0)
+				if (LIKELY(TraitSize > 0))
 				{
 					if (UNLIKELY(TraitSize == AutoSizedTraitSize))
 					{
@@ -617,28 +617,50 @@ struct APPARATUSRUNTIME_API FTraitRecord
 		{
 			const auto TraitSizePos = Archive.Tell();
 			uint16 TraitSize = 0;
-			Archive << TraitSize;
-			if (LIKELY(Type != nullptr))
+			if (UNLIKELY(TraitSizePos == INDEX_NONE))
 			{
-				const auto DataStartPos = TraitSizePos + sizeof(decltype(TraitSize));
-				Type->SerializeItem(Archive, DoObtainData(), /*Defaults=*/nullptr);
-				const auto DataEndPos = Archive.Tell();
-				if ((DataEndPos - DataStartPos) >= TNumericLimits<uint16>::Max())
+				// No backing storage seeking available.
+				// We can't use exact size here.
+				if (UNLIKELY(Type == nullptr))
 				{
-					UE_LOG(LogApparatus, Warning,
-						   TEXT("The size of the '%s' trait instance is too large (%i). "
-								"It will be saved in an auto-sized mode."),
-						   *(Type->GetName()),
-						   (int)(DataEndPos - DataStartPos));
-					TraitSize = AutoSizedTraitSize;
+					TraitSize = 0;
 				}
 				else
 				{
-					TraitSize = DataEndPos - DataStartPos;
+					TraitSize = AutoSizedTraitSize;
 				}
-				Archive.Seek(TraitSizePos);
 				Archive << TraitSize;
-				Archive.Seek(DataEndPos);
+				if (LIKELY(Type != nullptr))
+				{
+					Type->SerializeItem(Archive, DoObtainData(), /*Defaults=*/nullptr);
+				}
+			}
+			else
+			{
+				Archive << TraitSize; // Placeholder.
+				if (LIKELY(Type != nullptr))
+				{
+					const auto DataStartPos = TraitSizePos + sizeof(decltype(TraitSize));
+					Type->SerializeItem(Archive, DoObtainData(), /*Defaults=*/nullptr);
+					const auto DataEndPos = Archive.Tell();
+					if ((DataEndPos - DataStartPos) >= TNumericLimits<uint16>::Max())
+					{
+						UE_LOG(LogApparatus, Warning,
+							TEXT("The size of the '%s' trait instance is too large (%i). "
+								 "It will be saved in an auto-sized mode."),
+							*(Type->GetName()),
+							(int)(DataEndPos - DataStartPos));
+						TraitSize = AutoSizedTraitSize;
+					}
+					else
+					{
+						TraitSize = DataEndPos - DataStartPos;
+					}
+					
+					Archive.Seek(TraitSizePos);
+					Archive << TraitSize; // Real value.
+					Archive.Seek(DataEndPos);
+				}
 			}
 		}
 

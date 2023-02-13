@@ -55,22 +55,22 @@ struct FCommonChain
 {
   public:
 
+	/**
+	 * Invalid chain identifier.
+	 */
+	static constexpr int32 InvalidId = -1;
+
+	/**
+	 * First valid chain identifier.
+	 */
+	static constexpr int32 FirstId = 0;
+
 	enum
 	{
-		/**
-		 * Invalid chain identifier.
-		 */
-		InvalidId = -1,
-
 		/**
 		 * Invalid slot index.
 		 */
 		InvalidSlotIndex = -1,
-
-		/**
-		 * First valid chain identifier.
-		 */
-		FirstId = 0,
 
 		/**
 		 * Invalid cursor identifier.

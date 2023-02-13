@@ -153,7 +153,25 @@ struct APPARATUSRUNTIME_API FSubjectRecord
 
 	/**
 	 * Get a trait record by its type.
-	 * Statically-typed version.
+	 * Statically-typed immutable version.
+	 * 
+	 * @warning The returned reference can change
+	 * when the new records are added.
+	 * 
+	 * @tparam T The type of the trait to get a record of.
+	 * Must be a valid trait type.
+	 */
+	template < typename T,
+			   TTraitTypeSecurity<T> = true >
+	FORCEINLINE const FTraitRecord&
+	GetTraitRecord() const
+	{
+		return GetTraitRecord(T::StaticStruct());
+	}
+
+	/**
+	 * Get a trait record by its type.
+	 * Statically-typed mutable version.
 	 * 
 	 * @warning The returned reference can change
 	 * when the new records are added.
@@ -210,6 +228,18 @@ struct APPARATUSRUNTIME_API FSubjectRecord
 	ObtainTraitRecord()
 	{
 		return ObtainTraitRecord(T::StaticStruct());
+	}
+
+	void
+	RefreshFingerprintCache()
+	{
+		// Actualize the fingerprint cache...
+		FingerprintCache.Reset((EFlagmark)Flagmark);
+		for (auto& Trait : Traits)
+		{
+			if (UNLIKELY(!Trait)) continue;
+			FingerprintCache.Add(Trait.GetType());
+		}
 	}
 
   public:
@@ -587,14 +617,17 @@ struct APPARATUSRUNTIME_API FSubjectRecord
 	void
 	PostSerialize(const FArchive& Archive)
 	{
-		// Actualize the fingerprint...
-		FingerprintCache.Reset();
-		FingerprintCache.SetFlagmark((EFlagmark)Flagmark);
-		for (auto& Trait : Traits)
-		{
-			FingerprintCache.Add(Trait.GetType());
-		}
+		RefreshFingerprintCache();
 	};
+
+	/**
+	 * Called after creation via Blueprints.
+	 */
+	void
+	PostScriptConstruct()
+	{
+		RefreshFingerprintCache();
+	}
 
 	/**
 	 * Construct a new subject record from an archive
@@ -629,6 +662,71 @@ struct APPARATUSRUNTIME_API FSubjectRecord
 
 	/// @}
 #pragma endregion Serialization
+
+#pragma region Comparison
+	/// @name Comparison
+	/// @{
+
+	/**
+	 * Compare the record to an other record.
+	 * 
+	 * @param Other The record to compare to.
+	 * @return true If the records are equal.
+	 * @return false If the records are different.
+	 */
+	bool
+	operator==(const FSubjectRecord& Other) const
+	{
+		if (UNLIKELY(this == std::addressof(Other)))
+		{
+			return true;
+		}
+		if (GetFingerprint() != Other.GetFingerprint())
+		{
+			return false;
+		}
+		return Traits == Other.Traits;
+	}
+
+	/**
+	 * Compare the record to be unequal to an other record.
+	 * 
+	 * @param Other The record to compare to.
+	 * @return true If the records are different.
+	 * @return false If the records are the same.
+	 */
+	bool
+	operator!=(const FSubjectRecord& Other) const
+	{
+		if (UNLIKELY(this == std::addressof(Other)))
+		{
+			return false;
+		}
+		if (GetFingerprint() != Other.GetFingerprint())
+		{
+			return true;
+		}
+		return Traits != Other.Traits;
+	}
+
+	/**
+	 * Compare two subject records for equality.
+	 * 
+	 * @param Other The other subject record to compare to.
+	 * @param PortFlags The contextual port flags.
+	 * @return The state of examination.
+	 */
+	bool
+	Identical(const FSubjectRecord* Other, uint32 PortFlags) const
+	{
+		if (UNLIKELY(this == Other)) return true;
+		if (UNLIKELY(Other == nullptr)) return false;
+		
+		return (*this) == (*Other);
+	}
+
+	/// @}
+#pragma endregion Comparison
 
 }; //-struct FSubjectRecord
 
@@ -679,7 +777,9 @@ struct TStructOpsTypeTraits<FSubjectRecord> : public TStructOpsTypeTraitsBase2<F
 	enum 
 	{
 		WithCopy = true,
-		WithPostSerialize = true
+		WithPostSerialize = true,
+		WithPostScriptConstruct = true,
+		WithIdentical = true
 	}; 
 };
 

@@ -1179,6 +1179,12 @@ operator|(const FBitMask& MaskA, const FBitMask &MaskB)
 	return MoveTemp(Result);
 }
 
+/**
+ * Calculate the hash value of the bit mask.
+ * 
+ * @param BitMask The bit mask to hash.
+ * @return The calculated hash value.
+ */
 FORCEINLINE uint32
 GetTypeHash(const FBitMask& BitMask)
 {

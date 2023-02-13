@@ -115,7 +115,7 @@ struct APPARATUSRUNTIME_API FFingerprint
 	 * hash for the atomicity of the flagmark
 	 * operations.
 	 */
-	mutable std::atomic<uint32> HashCache{0};
+	mutable uint32 HashCache = 0;
 
 	/**
 	 * Get the hash of a fingerprint.
@@ -939,6 +939,8 @@ struct APPARATUSRUNTIME_API FFingerprint
 #pragma endregion Matching
 
 #pragma region Comparison
+	/// @name Comparison
+	/// @{
 
 	/**
 	 * Compare two fingerprints for equality.
@@ -947,7 +949,9 @@ struct APPARATUSRUNTIME_API FFingerprint
 	operator==(const FFingerprint& Other) const
 	{
 		if (UNLIKELY(this == std::addressof(Other)))
+		{
 			return true;
+		}
 
 		return (CalcHash() == Other.CalcHash()) && 
 			   (GetFlagmark() == Other.GetFlagmark()) &&
@@ -962,7 +966,9 @@ struct APPARATUSRUNTIME_API FFingerprint
 	operator!=(const FFingerprint& Other) const
 	{
 		if (UNLIKELY(this == std::addressof(Other)))
+		{
 			return false;
+		}
 
 		return (CalcHash() != Other.CalcHash()) ||
 			   (GetFlagmark() != Other.GetFlagmark()) ||
@@ -984,12 +990,17 @@ struct APPARATUSRUNTIME_API FFingerprint
 		{
 			return true;
 		}
+		if (UNLIKELY(Other == nullptr))
+		{
+			return false;
+		}
 		return (CalcHash() == Other->CalcHash()) &&
 			   (GetFlagmark() == Other->GetFlagmark()) &&
 			   (GetTraitmark().Identical(&Other->Traitmark, PortFlags)) &&
 			   (GetDetailmark().Identical(&Other->Detailmark, PortFlags));
 	}
 
+	/// @}
 #pragma endregion Comparison
 
 #pragma region Search
@@ -1228,7 +1239,7 @@ struct APPARATUSRUNTIME_API FFingerprint
 	TOutcome<Paradigm>
 	Set(FFingerprint&& InFingerprint)
 	{
-		HashCache = InFingerprint.HashCache.load();
+		HashCache = InFingerprint.HashCache;
 		InFingerprint.HashCache = 0;
 		if (IsHarsh(Paradigm)) // Compile-time branch.
 		{
@@ -1271,7 +1282,7 @@ struct APPARATUSRUNTIME_API FFingerprint
 			{
 				Traitmark.template Set<Paradigm>(InFingerprint.Traitmark);
 				Detailmark.template Set<Paradigm>(InFingerprint.Detailmark);
-				HashCache = InFingerprint.HashCache.load(); // Safer to set as zero since thread-safety...
+				HashCache = InFingerprint.HashCache;
 			}
 			else
 			{
@@ -1295,7 +1306,7 @@ struct APPARATUSRUNTIME_API FFingerprint
 				RealFlagmark = InFingerprint.RealFlagmark.load();
 				Traitmark.template Set<Paradigm>(InFingerprint.Traitmark);
 				Detailmark.template Set<Paradigm>(InFingerprint.Detailmark);
-				HashCache = InFingerprint.HashCache.load();
+				HashCache = InFingerprint.HashCache;
 				return EApparatusStatus::Success;
 			}
 			else
@@ -2558,17 +2569,14 @@ struct APPARATUSRUNTIME_API FFingerprint
 	FORCEINLINE uint32
 	CalcHash() const
 	{
-		auto Hash = HashCache.load();
-		if (LIKELY(Hash))
+		if (LIKELY(HashCache != 0))
 		{
-			return Hash;
+			return HashCache;
 		}
 		// The flagmark hashing is not performed here,
-		// fo the flagmark operations to be atomic and thread-safe.
-		Hash = HashCombine(GetTypeHash(Traitmark),
-						   GetTypeHash(Detailmark));
-		HashCache.store(Hash);
-		return Hash;
+		// for the flagmark operations to be atomic and thread-safe.
+		return HashCache = HashCombine(GetTypeHash(Traitmark),
+									   GetTypeHash(Detailmark));
 	}
 
 #pragma region Serialization

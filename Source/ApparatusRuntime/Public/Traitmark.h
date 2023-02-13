@@ -313,7 +313,7 @@ struct APPARATUSRUNTIME_API FTraitmark
 	mutable FBitMask TraitsMask;
 
 	/**
-	 * Should the traits be decomposed with theirbase types when added.
+	 * Should the traits be decomposed with their base types when being added.
 	 */
 	bool bDecomposed = false;
 
@@ -401,14 +401,20 @@ struct APPARATUSRUNTIME_API FTraitmark
 	 * The number of traits in the traitmark.
 	 */
 	FORCEINLINE int32
-	TraitsNum() const { return Traits.Num(); }
+	TraitsNum() const
+	{
+		return Traits.Num();
+	}
 
 	/**
 	 * Get the traits mask of the traitmark.
 	 * Constant version.
 	 */
 	FORCEINLINE const FBitMask&
-	GetTraitsMask() const { return TraitsMask; }
+	GetTraitsMask() const
+	{
+		return TraitsMask;
+	}
 
 	/**
 	 * Get a trait type by its index.
@@ -720,6 +726,19 @@ struct APPARATUSRUNTIME_API FTraitmark
 	}
 
 #pragma region Comparison
+	/// @name Comparison
+	/// @{
+
+	/**
+	 * Calculate the traitmark hash.
+	 *
+	 * @return The hash of the traitmark.
+	 */
+	FORCEINLINE uint32
+	CalcHash() const
+	{
+		return HashCombine(GetTypeHash(Traits.Num()), TraitsMask.CalcHash());
+	}
 
 	/**
 	 * Compare two traitmarks for equality.
@@ -730,7 +749,12 @@ struct APPARATUSRUNTIME_API FTraitmark
 	FORCEINLINE bool
 	operator==(const FTraitmark& Other) const
 	{
-		// Traits bit-masks already have address comparison.
+		// Must also check the numbers of traits,
+		// since child traits can cover up the bases:
+		if (Traits.Num() != Other.Traits.Num())
+		{
+			return false;
+		}
 		return GetTraitsMask() == Other.GetTraitsMask();
 	}
 
@@ -746,7 +770,12 @@ struct APPARATUSRUNTIME_API FTraitmark
 	FORCEINLINE bool
 	operator!=(const FTraitmark& Other) const
 	{
-		// Traits bit-masks already have address comparison.
+		// Must also check the numbers of traits,
+		// since child traits can cover up the bases:
+		if (Traits.Num() != Other.Traits.Num())
+		{
+			return true;
+		}
 		return GetTraitsMask() != Other.GetTraitsMask();
 	}
 
@@ -760,20 +789,18 @@ struct APPARATUSRUNTIME_API FTraitmark
 	bool
 	Identical(const FTraitmark* Other, uint32 PortFlags) const
 	{
-		if (this == Other)
+		if (UNLIKELY(this == Other))
 		{
 			return true;
 		}
-#if WITH_EDITOR
-		if (!FApp::IsGame())
+		if (UNLIKELY(Other == nullptr))
 		{
-			// Correct support for property editing:
-			return Traits == Other->Traits;
+			return false;
 		}
-#endif
 		return (*this) == (*Other);
 	}
 
+	/// @}
 #pragma endregion Comparison
 
 #pragma region Search
@@ -1631,10 +1658,16 @@ struct APPARATUSRUNTIME_API FTraitmark
 
 }; //-FTraitmark
 
+/**
+ * Calculate the traitmark hash.
+ * 
+ * @param Traitmark The traitmark to calculate hash for.
+ * @return The hash of the traitmark.
+ */
 FORCEINLINE uint32
 GetTypeHash(const FTraitmark& Traitmark)
 {
-	return GetTypeHash(Traitmark.GetTraitsMask());
+	return Traitmark.CalcHash();
 }
 
 template<>

@@ -245,16 +245,38 @@ struct APPARATUSRUNTIME_API FDetailmark
 	}
 
 #pragma region Comparison
+	/// @name Comparison
+	/// @{
+
+	/**
+	 * Calculate the hash sum of the detailmark.
+	 * 
+	 * @return The calculated hash sum.
+	 */
+	FORCEINLINE uint32
+	CalcHash() const
+	{
+		return HashCombine(GetTypeHash(Details.Num()), DetailsMask.CalcHash());
+	}
 
 	/**
 	 * Compare two detailmarks for equality.
 	 * 
 	 * Two detailmarks are considered to be equal
 	 * if their details composition is equal (regardless of the ordering).
+	 * 
+	 * @param Other The other detailmark to compare to.
+	 * @return The status of comparison.
 	 */
 	FORCEINLINE bool
 	operator==(const FDetailmark& Other) const
 	{
+		// Compare by number of details,
+		// since the child detail can cover the base ones:
+		if (Details.Num() != Other.Details.Num())
+		{
+			return false;
+		}
 		return GetDetailsMask() == Other.GetDetailsMask();
 	}
 
@@ -263,18 +285,24 @@ struct APPARATUSRUNTIME_API FDetailmark
 	 * 
 	 * Two detailmarks are considered to be inequal
 	 * if their details composition is different (regardless of the ordering).
+	 * 
+	 * @param Other The other detailmark to compare to.
+	 * @return The status of comparison.
 	 */
 	FORCEINLINE bool
 	operator!=(const FDetailmark& Other) const
 	{
+		// Compare by number of details,
+		// since the child detail can cover the base ones:
+		if (Details.Num() != Other.Details.Num())
+		{
+			return true;
+		}
 		return GetDetailsMask() != Other.GetDetailsMask();
 	}
 
 	/**
-	 * Compare two detailmarks for equality. Editor-friendly method.
-	 * 
-	 * This compares the details arrays during the editing mode,
-	 * since it is used for the changes detection.
+	 * Compare two detailmarks for equality.
 	 * 
 	 * @param Other The other detailmark to compare to.
 	 * @param PortFlags The contextual port flags.
@@ -283,17 +311,18 @@ struct APPARATUSRUNTIME_API FDetailmark
 	bool
 	Identical(const FDetailmark* Other, uint32 PortFlags) const
 	{
-#if WITH_EDITOR
-		if (!FApp::IsGame())
+		if (UNLIKELY(this == Other))
 		{
-			// Correct support for property editing
-			// requires comparing the actual details arrays.
-			return Details == Other->Details;
+			return true;
 		}
-#endif
+		if (UNLIKELY(Other == nullptr))
+		{
+			return false;
+		}
 		return (*this) == (*Other);
 	}
 
+	/// @}
 #pragma endregion Comparison
 
   private:
@@ -1613,10 +1642,16 @@ struct APPARATUSRUNTIME_API FDetailmark
 
 }; //-FDetailmark
 
+/**
+ * Calculate the hash sum of a detailmark.
+ * 
+ * @param Detailmark The detailmark to hash.
+ * @return The hash sum of the detailmark.
+ */
 FORCEINLINE uint32
 GetTypeHash(const FDetailmark& Detailmark)
 {
-	return GetTypeHash(Detailmark.GetDetailsMask());
+	return Detailmark.CalcHash();
 }
 
 FORCEINLINE bool

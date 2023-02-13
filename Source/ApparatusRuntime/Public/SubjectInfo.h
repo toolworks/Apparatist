@@ -1491,20 +1491,21 @@ struct APPARATUSRUNTIME_API FSubjectInfo
 
 	/**
 	 * Obtain a trait data pointer from the subject by its type.
-	 * Templated version
+	 * Statically-typed default paradigm version
 	 * 
 	 * If the trait is not currently within the subject,
 	 * it gets created anew and returned
 	 * to the receiver.
 	 *
 	 * @tparam T The type of the trait to obtain.
+	 * @tparam Paradigm The paradigm to work under.
 	 * @return The obtained trait pointer.
 	 */
-	template < typename T >
+	template < typename T, EParadigm Paradigm = EParadigm::DefaultInternal >
 	FORCEINLINE auto
 	ObtainTraitPtr()
 	{
-		return ObtainTraitPtr<EParadigm::DefaultInternal, T>();
+		return ObtainTraitPtr<Paradigm, T>();
 	}
 
 	/**
@@ -1805,6 +1806,46 @@ struct APPARATUSRUNTIME_API FSubjectInfo
 	template < EParadigm Paradigm = EParadigm::DefaultInternal >
 	TOutcome<Paradigm>
 	RemoveTraits(UScriptStruct* const TraitType);
+
+	/**
+	 * Remove traits from the subject based on a type.
+	 * Statically-typed version.
+	 * 
+	 * If there is no such trait in the subject,
+	 * nothing is performed and EApparatusStatus::Noop is returned.
+	 *
+	 * @tparam Paradigm The paradigm to work under.
+	 * @tparam T The base type of the traits to remove.
+	 * @return The status of the operation.
+	 * @return EApparatusStatus::Noop If there were no such traits
+	 * in the subject.
+	 */
+	template < EParadigm Paradigm, typename T >
+	FORCEINLINE TOutcome<Paradigm>
+	RemoveTraits()
+	{
+		return RemoveTraits(T::StaticStruct());
+	}
+
+	/**
+	 * Remove traits from the subject based on a type.
+	 * Statically-typed default paradigm version.
+	 * 
+	 * If there is no such trait in the subject,
+	 * nothing is performed and EApparatusStatus::Noop is returned.
+	 *
+	 * @tparam T The base type of the traits to remove.
+	 * @tparam Paradigm The paradigm to work under.
+	 * @return The status of the operation.
+	 * @return EApparatusStatus::Noop If there were no such traits
+	 * in the subject.
+	 */
+	template < typename T, EParadigm Paradigm = EParadigm::DefaultInternal >
+	FORCEINLINE TOutcome<Paradigm>
+	RemoveTraits()
+	{
+		return RemoveTraits<Paradigm, T>();
+	}
 
 	/**
 	 * Remove all of the traits from the subject.

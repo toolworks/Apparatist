@@ -445,11 +445,18 @@ struct APPARATUSRUNTIME_API FCommonSubjectHandle
 
 	/**
 	 * Check if the subject matches a certain filter.
+	 * 
+	 * Returns @c false, if the subject handle is invalid.
 	 */
-	FORCEINLINE bool
+	bool
 	Matches(const FFilter& InFilter) const
 	{
-		return GetFingerprint().Matches(InFilter);
+		const auto Info = FindInfo();
+		if (LIKELY(Info != nullptr))
+		{
+			return Info->GetFingerprint().Matches(InFilter);
+		}
+		return false;
 	}
 
 	/// @}
@@ -1256,8 +1263,7 @@ struct TSubjectHandle
 	}
 
 	/**
-	 * Destroy the subject.
-	 * Deferred version.
+	 * Destroy the subject in a deferred fashion.
 	 *
 	 * The actual entity destruction is deferred until the 
 	 * deferreds are applied either automatically
@@ -1275,7 +1281,10 @@ struct TSubjectHandle
 	DespawnDeferred(const bool bHard = true) const
 	{
 		const auto Info = FindInfo();
-		AssessCondition(Paradigm, Info != nullptr, EApparatusStatus::InvalidState);
+		if (UNLIKELY(Info == nullptr))
+		{
+			return EApparatusStatus::Noop;
+		}
 		return Info->template DespawnDeferred<Paradigm>(bHard);
 	}
 
