@@ -307,6 +307,22 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 		return OutOverlappers.Num();
 	}
 
+	/**
+	 * Get overlapping bubbles within the cage.
+	 * 
+	 * @param Location The location to track.
+	 * @param Radius The radius of overlapping.
+	 * @return The overlapped bubbles.
+	 */
+	TArray<FSubjectHandle>
+	GetOverlapping(const FVector& Location,
+				   const float    Radius = 0.0f)
+	{
+		TArray<FSubjectHandle> Overlappers;
+		GetOverlapping(Location, Radius, Overlappers);
+		return MoveTemp(Overlappers);
+	}
+
 	/* Get position in the cage by index of the cell*/
 	FORCEINLINE FIntVector
 	GetCellPointByIndex(int32 Index) const
