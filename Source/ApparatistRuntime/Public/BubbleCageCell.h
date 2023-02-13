@@ -20,7 +20,15 @@ struct APPARATISTRUNTIME_API FBubbleCageCell
 
   public:
 
-	/* Subjects in a grid cell. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "BubbleCage")
+	/**
+	 * The list of subjects with their centers within this cage cell.
+	 */
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "BubbleCage")
 	FSubjectHandles8 Subjects;
+
+	/**
+	 * The accumulated fingerprint of all subjects within this cell.
+	 */
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "BubbleCage")
+	FFingerprint Fingerprint;
 };

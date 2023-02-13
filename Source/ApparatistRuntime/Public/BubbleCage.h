@@ -81,7 +81,7 @@ class APPARATISTRUNTIME_API ABubbleCage
 	ABubbleCage();
 
 	/**
-	 * Get overlapping spheres for the specified location.
+	 * Get overlapping spheres for a specific location.
 	 */
 	static int32
 	GetOverlapping(const FVector&          Location,
@@ -96,11 +96,27 @@ class APPARATISTRUNTIME_API ABubbleCage
 	}
 
 	/**
-	 * Get overlapping spheres for the specified location.
+	 * Get overlapping spheres for a specific location and a filter.
+	 */
+	static int32
+	GetOverlapping(const FVector&          Location,
+				   const FFilter&          Filter,
+				   TArray<FSubjectHandle>& OutOverlappers)
+	{
+		if (LIKELY(Instance != nullptr && Instance->BubbleCageComponent != nullptr))
+		{
+			return Instance->BubbleCageComponent->GetOverlapping(Location, Filter, OutOverlappers);
+		}
+		OutOverlappers.Reset();
+		return 0;
+	}
+
+	/**
+	 * Get overlapping spheres for a specific location and a filter.
 	 */
 	static TArray<FSubjectHandle>
 	GetOverlapping(const FVector& Location,
-				   const float    Radius)
+				   const float    Radius = 0.0f)
 	{
 		if (LIKELY(Instance != nullptr && Instance->BubbleCageComponent != nullptr))
 		{
@@ -110,9 +126,23 @@ class APPARATISTRUNTIME_API ABubbleCage
 	}
 
 	/**
+	 * Get overlapping spheres for a specific location and a filter.
+	 */
+	static TArray<FSubjectHandle>
+	GetOverlapping(const FVector& Location,
+				   const float    Radius,
+				   const FFilter& Filter)
+	{
+		if (LIKELY(Instance != nullptr && Instance->BubbleCageComponent != nullptr))
+		{
+			return Instance->BubbleCageComponent->GetOverlapping(Location, Radius, Filter);
+		}
+		return TArray<FSubjectHandle>();
+	}
+
+	/**
 	 * Get overlapping spheres for the specified location.
 	 */
-	UFUNCTION(BlueprintCallable)
 	static int32
 	GetOverlapping(const FVector&          Location,
 				   const float             Radius,
@@ -121,6 +151,24 @@ class APPARATISTRUNTIME_API ABubbleCage
 		if (LIKELY(Instance != nullptr && Instance->BubbleCageComponent != nullptr))
 		{
 			return Instance->BubbleCageComponent->GetOverlapping(Location, Radius, OutOverlappers);
+		}
+		OutOverlappers.Reset();
+		return 0;
+	}
+
+	/**
+	 * Get overlapping spheres for the specified location.
+	 */
+	UFUNCTION(BlueprintCallable)
+	static int32
+	GetOverlapping(const FVector&          Location,
+				   const float             Radius,
+				   const FFilter&          Filter,
+				   TArray<FSubjectHandle>& OutOverlappers)
+	{
+		if (LIKELY(Instance != nullptr && Instance->BubbleCageComponent != nullptr))
+		{
+			return Instance->BubbleCageComponent->GetOverlapping(Location, Radius, Filter, OutOverlappers);
 		}
 		OutOverlappers.Reset();
 		return 0;

@@ -49,7 +49,7 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	 * 
 	 * Used for neighbour detection.
 	 */
-	float LargestRadius = 0;
+	std::atomic<float> LargestRadius{0};
 
   public:
 
@@ -257,7 +257,57 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	/**
 	 * Get overlapping spheres for the specified location.
 	 */
-	UFUNCTION(BlueprintCallable)
+	int32
+	GetOverlapping(const FVector&          Location,
+				   const FFilter&          Filter,
+				   TArray<FSubjectHandle>& OutOverlappers) const
+	{
+		OutOverlappers.Reset();
+		const auto Range = FVector(LargestRadius);
+		const auto CagePosMin = WorldToCage(Location - Range);
+		const auto CagePosMax = WorldToCage(Location + Range);
+		for (auto i = CagePosMin.X; i <= CagePosMax.X; ++i)
+		{
+			for (auto j = CagePosMin.Y; j <= CagePosMax.Y; ++j)
+			{
+				for (auto k = CagePosMin.Z; k <= CagePosMax.Z; ++k)
+				{
+					const auto NeighbourCellPos = FIntVector(i, j, k);
+					if (LIKELY(IsInside(NeighbourCellPos)))
+					{
+						const auto& NeighbourCell = At(NeighbourCellPos);
+						// Negative filtering can't be performed here,
+						// since the cell's fingerprint includes a sum of internals.
+						if (NeighbourCell.Fingerprint.Matches(Filter.GetFingerprint()))
+						{
+							for (int32 t = 0; t < NeighbourCell.Subjects.Num(); ++t)
+							{
+								const auto OtherBubble = NeighbourCell.Subjects[t];
+								if (LIKELY(OtherBubble.Matches(Filter)))
+								{
+									const auto OtherBubbleSphere =
+										OtherBubble.GetTrait<FBubbleSphere>();
+									const auto OtherLocation =
+										OtherBubble.GetTrait<FLocated>().GetLocation();
+									const auto Delta = Location - OtherLocation;
+									const float Distance = Delta.Size();
+									if (OtherBubbleSphere.Radius > Distance)
+									{
+										OutOverlappers.Add(OtherBubble);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return OutOverlappers.Num();
+	}
+
+	/**
+	 * Get overlapping spheres for the specified location.
+	 */
 	int32
 	GetOverlapping(const FVector&          Location,
 				   const float             Radius,
@@ -308,18 +358,95 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	}
 
 	/**
+	 * Get overlapping spheres for the specified location.
+	 */
+	UFUNCTION(BlueprintCallable)
+	int32
+	GetOverlapping(const FVector&          Location,
+				   const float             Radius,
+				   const FFilter&          Filter,
+				   TArray<FSubjectHandle>& OutOverlappers) const
+	{
+		if (UNLIKELY(Radius == 0))
+		{
+			return GetOverlapping(Location, Filter, OutOverlappers);
+		}
+
+		OutOverlappers.Reset();
+		const auto Range = FVector(Radius + LargestRadius);
+		const auto CagePosMin = WorldToCage(Location - Range);
+		const auto CagePosMax = WorldToCage(Location + Range);
+		for (auto i = CagePosMin.X; i <= CagePosMax.X; ++i)
+		{
+			for (auto j = CagePosMin.Y; j <= CagePosMax.Y; ++j)
+			{
+				for (auto k = CagePosMin.Z; k <= CagePosMax.Z; ++k)
+				{
+					const auto NeighbourCellPos = FIntVector(i, j, k);
+					if (LIKELY(IsInside(NeighbourCellPos)))
+					{
+						const auto& NeighbourCell = At(NeighbourCellPos);
+						// Negative filtering can't be performed here,
+						// since the cell's fingerprint includes a sum of internals.
+						if (NeighbourCell.Fingerprint.Matches(Filter.GetFingerprint()))
+						{
+							for (int32 t = 0; t < NeighbourCell.Subjects.Num(); ++t)
+							{
+								const auto OtherBubble = NeighbourCell.Subjects[t];
+								if (LIKELY(OtherBubble.Matches(Filter)))
+								{
+									const auto OtherBubbleSphere =
+										OtherBubble.GetTrait<FBubbleSphere>();
+									const auto OtherLocation =
+										OtherBubble.GetTrait<FLocated>().GetLocation();
+									const auto Delta = Location - OtherLocation;
+									const float Distance = Delta.Size();
+									const float DistanceDelta = (Radius + OtherBubbleSphere.Radius) - Distance;
+									if (DistanceDelta > 0)
+									{
+										OutOverlappers.Add(OtherBubble);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return OutOverlappers.Num();
+	}
+
+	/**
 	 * Get overlapping bubbles within the cage.
 	 * 
 	 * @param Location The location to track.
 	 * @param Radius The radius of overlapping.
 	 * @return The overlapped bubbles.
 	 */
-	TArray<FSubjectHandle>
+	FORCEINLINE  TArray<FSubjectHandle>
 	GetOverlapping(const FVector& Location,
 				   const float    Radius = 0.0f)
 	{
 		TArray<FSubjectHandle> Overlappers;
 		GetOverlapping(Location, Radius, Overlappers);
+		return MoveTemp(Overlappers);
+	}
+
+	/**
+	 * Get overlapping bubbles within the within a radius and a filter.
+	 * 
+	 * @param Location The location to track.
+	 * @param Radius The radius of overlapping.
+	 * @param Filter The filter to narrow by.
+	 * @return The overlapped bubbles.
+	 */
+	FORCEINLINE TArray<FSubjectHandle>
+	GetOverlapping(const FVector& Location,
+				   const float    Radius,
+				   const FFilter& Filter)
+	{
+		TArray<FSubjectHandle> Overlappers;
+		GetOverlapping(Location, Radius, Filter, Overlappers);
 		return MoveTemp(Overlappers);
 	}
 
@@ -420,7 +547,7 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	}
 
 	/**
-	 * Update the cage filling it with existing bubbles.
+	 * Update the cage, filling it with existing bubbles.
 	 */
 	UFUNCTION(BlueprintCallable)
 	void
@@ -434,53 +561,52 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 		int32 CellIndex;
 		while (OccupiedCells.Dequeue(CellIndex))
 		{
-			Cells[CellIndex].Subjects.Empty();
+			auto& Cell = Cells[CellIndex];
+			Cell.Subjects.Empty();
+			Cell.Fingerprint.Reset();
 		}
 
-		LargestRadius = 0;
+		LargestRadius.store(0, std::memory_order_release);
 
 		// Occupy the cage cells...
 		static const auto Filter = FFilter::Make<FLocated, FBubbleSphere>();
 		// An atomic flag used for syncing the access to the
 		// subjects collection:
-		std::atomic_flag CollectingLock = ATOMIC_FLAG_INIT;
+		FCriticalSection CollectingLock;
 		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=, &CollectingLock]
 		(FSolidSubjectHandle  Subject,
 		 const FLocated&      Located,
 		 const FBubbleSphere& BubbleSphere)
 		{
-			if (LargestRadius < BubbleSphere.Radius)
-			{
-				LargestRadius = BubbleSphere.Radius;
-			}
 			const auto Location = Located.Location;
 			if (UNLIKELY(!IsInside(Location)))
 			{
 				Subject.DespawnDeferred();
 				return;
 			}
-			if (LargestRadius < BubbleSphere.Radius)
 			{
-				LargestRadius = BubbleSphere.Radius;
+				// Solve the largest radius...
+				auto Largest = LargestRadius.load(std::memory_order_relaxed);
+				if (Largest < BubbleSphere.Radius)
+				{
+					while (!LargestRadius.compare_exchange_weak(Largest, BubbleSphere.Radius, std::memory_order_relaxed))
+					{
+						if (Largest >= BubbleSphere.Radius)
+						{
+							break;
+						}
+					}
+				}
 			}
+
 			const auto CellIndex = GetIndexAt(Location);
-			while (CollectingLock.test_and_set(std::memory_order_acquire));
- 			Cells[CellIndex].Subjects.Add((FSubjectHandle)Subject);
-			CollectingLock.clear(std::memory_order_release);
-#if BUBBLE_DEBUG
-			const FBox CellBox = BoxAt(Location);
-			DrawDebugBox(GetWorld(),
-						 CellBox.GetCenter(),
-						 CellBox.GetExtent(), FColor::Yellow, false,
-						 0, 0, 2);
-			DrawDebugSphere(GetWorld(),
-							Location,
-							BubbleSphere.Radius, 12, FColor::Cyan, false, 0, 0, 1);
-			DrawDebugString(
-				GetWorld(), CellBox.GetCenter(),
-				FString::Format(TEXT("Cell #{0}"),
-								FStringFormatOrderedArguments(CellIndex)));
-#endif
+			{
+				FScopeLock Lock(&CollectingLock);
+				auto& Cell = Cells[CellIndex];
+				Cell.Subjects.Add((FSubjectHandle)Subject);
+				Cell.Fingerprint.Add(Subject.GetFingerprint());
+			}
+
 			OccupiedCells.Enqueue(CellIndex);
 		}, ThreadsCount);
 	}
