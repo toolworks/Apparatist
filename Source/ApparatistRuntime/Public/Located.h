@@ -21,16 +21,14 @@ struct APPARATISTRUNTIME_API FLocated
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Data")
 	FVector Location = FVector::ZeroVector;
 
-	/* Default constructor. */
-	FLocated() {}
-
-	/* Constructor with all arguments. */
-	FORCEINLINE FLocated(const FTransform& InTransform)
-	  : Location(InTransform.GetLocation())
+	/** Initialize a default instance. */
+	FORCEINLINE
+	FLocated()
 	{}
 
-	/* Construct the trait by 2D-location. */
-	FORCEINLINE FLocated(const FVector& InLocation)
+	/** Initialize with a vector. */
+	FORCEINLINE
+	FLocated(const FVector& InLocation)
 	  : Location(InLocation)
 	{}
 
@@ -46,5 +44,23 @@ struct APPARATISTRUNTIME_API FLocated
 	SetLocation(const FVector& InLocation)
 	{
 		Location = InLocation;
+	}
+
+	/**
+	 * Implicit conversion to an immutable vector.
+	 */
+	FORCEINLINE
+	operator const FVector&() const
+	{
+		return Location;
+	}
+
+	/**
+	 * Implicit conversion to a mutable vector.
+	 */
+	FORCEINLINE
+	operator FVector&()
+	{
+		return Location;
 	}
 };
