@@ -33,6 +33,18 @@
 
 #define BUBBLE_DEBUG 0
 
+
+/**
+ * The state of currently being coupled.
+ * 
+ * This is only used if the UBubbleCageComponent::bDecoupleViaTrait is set.
+ */
+USTRUCT(Category = "BubbleCage")
+struct APPARATISTRUNTIME_API FCoupling
+{
+	GENERATED_BODY()
+};
+
 /**
  * A simple and performant collision detection and decoupling for spheres.
  */
@@ -73,13 +85,13 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	/**
 	 * The size (width, height, depth) of a single cell of the cage in world units.
 	 */
-	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Volume", Meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Volume", Meta = (AllowPrivateAccess))
 	float CellSize = 1;
 
 	/**
 	 * The total size of the cage in number of cells.
 	 */
-	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Volume", Meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Volume", Meta = (AllowPrivateAccess))
 	FIntVector Size;
 
 	/**
@@ -87,8 +99,17 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	 * 
 	 * These are precalculated at start.
 	 */
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Volume", Meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Volume", Meta = (AllowPrivateAccess))
 	mutable FBox Bounds;
+
+	/**
+	 * The decoupling algorithm will be run in parallel through a dedicated trait.
+	 * 
+	 * This will in turn result in copying of the coupling subjects.
+	 */
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Performance", Meta = (AllowPrivateAccess))
+	bool bDecoupleViaTrait = false;
+
 
 	bool bInitialized = false;
 
@@ -102,6 +123,29 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	 */
 	TQueue<int32, EQueueMode::Mpsc> OccupiedCells;
 
+	struct FCouplingEntry
+	{
+		FSubjectHandle Subject;
+
+		FLocated* Located = nullptr;
+
+		FBubbleSphere* BubbleSphere = nullptr;
+
+		FORCEINLINE
+		FCouplingEntry()
+		{}
+
+		FORCEINLINE
+		FCouplingEntry(FSubjectHandle InSubject, FLocated* InLocated, FBubbleSphere* InBubbleSphere)
+		  : Subject(InSubject), Located(InLocated), BubbleSphere(InBubbleSphere)
+		{}
+	};
+
+	/**
+	 * All the subjects that are actually coupling with each other and need decoupling.
+	 */
+	TQueue<FCouplingEntry, EQueueMode::Mpsc> CoupledSubjects;
+
 	/**
 	 * Initialize the internal cells array.
 	 */
@@ -110,7 +154,7 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	{
 		Cells.Reset(); // Make sure there are no cells.
 		if (ensureAlwaysMsgf((int64)Size.X * (int64)Size.Y * (int64)Size.Z < (int64)TNumericLimits<int32>::Max(),
-							TEXT("The '%s' bubble cage has too many cells in it. Please, decrease its corresponding size in cells.")))
+							 TEXT("The '%s' bubble cage has too many cells in it. Please, decrease its corresponding size in cells.")))
 		{
 			Cells.AddDefaulted(Size.X * Size.Y * Size.Z);
 		}
@@ -566,7 +610,7 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 			Cell.Fingerprint.Reset();
 		}
 
-		LargestRadius.store(0, std::memory_order_release);
+		LargestRadius.store(0, std::memory_order_relaxed);
 
 		// Occupy the cage cells...
 		static const auto Filter = FFilter::Make<FLocated, FBubbleSphere>();
@@ -601,14 +645,185 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 
 			const auto CellIndex = GetIndexAt(Location);
 			{
-				FScopeLock Lock(&CollectingLock);
 				auto& Cell = Cells[CellIndex];
+				Cell.Lock();
 				Cell.Subjects.Add((FSubjectHandle)Subject);
 				Cell.Fingerprint.Add(Subject.GetFingerprint());
+				Cell.Unlock();
 			}
 
 			OccupiedCells.Enqueue(CellIndex);
 		}, ThreadsCount);
+	}
+
+	template < bool bUseTrait >
+	void
+	DoDecouple()
+	{
+		QUICK_SCOPE_CYCLE_COUNTER(STAT_BubbleCage_Decouple);
+
+		const auto Mechanism = GetMechanism();
+
+		static const auto Filter = FFilter::Make<FLocated, FBubbleSphere>();
+		// Detect collisions...
+		{
+			QUICK_SCOPE_CYCLE_COUNTER(STAT_BubbleCage_DetectCollisions);
+			CoupledSubjects.Empty();
+			Mechanism->EnchainSolid(Filter)->OperateConcurrently(
+			[&](FSolidSubjectHandle Bubble,
+				FLocated&           Located,
+				FBubbleSphere&      BubbleSphere)
+			{
+				if (UNLIKELY(BubbleSphere.DecoupleProportion <= 0.0f)) return;
+				const auto Location = Located.Location;
+				const auto Range = FVector(BubbleSphere.Radius + LargestRadius.load(std::memory_order_relaxed));
+				const auto CagePosMin = WorldToCage(Location - Range);
+				const auto CagePosMax = WorldToCage(Location + Range);
+				for (auto i = CagePosMin.X; i <= CagePosMax.X; ++i)
+				{
+					for (auto j = CagePosMin.Y; j <= CagePosMax.Y; ++j)
+					{
+						for (auto k = CagePosMin.Z; k <= CagePosMax.Z; ++k)
+						{
+							const auto NeighbourCellPos = FIntVector(i, j, k);
+							if (LIKELY(IsInside(NeighbourCellPos)))
+							{
+								const auto& NeighbourCell = At(NeighbourCellPos);
+								for (int32 t = 0; t < NeighbourCell.Subjects.Num(); ++t)
+								{
+									const auto OtherBubble = (FSolidSubjectHandle)NeighbourCell.Subjects[t];
+									if (LIKELY(OtherBubble && (OtherBubble != Bubble)))
+									{
+										const auto& OtherBubbleSphere =
+											OtherBubble.GetTraitRef<FBubbleSphere>();
+										const auto OtherLocation =
+											OtherBubble.GetTraitRef<FLocated>().GetLocation();
+										const auto Delta = Location - OtherLocation;
+										const auto Distance = Delta.Size();
+										const float DistanceDelta =
+											(BubbleSphere.Radius + OtherBubbleSphere.Radius) - Distance;
+										if (DistanceDelta > 0)
+										{
+											const float Strength = BubbleSphere.DecoupleProportion /
+															(BubbleSphere.DecoupleProportion + OtherBubbleSphere.DecoupleProportion);
+											// We're hitting a neighbor.
+											if (UNLIKELY(Distance <= SMALL_NUMBER))
+											{
+												// The distance is too small to get the direction.
+												// Use the ids to get the direction.
+												if (Bubble.GetId() > OtherBubble.GetId())
+												{
+													BubbleSphere.AccumulatedDecouple +=
+														FVector::LeftVector * DistanceDelta *
+														Strength;
+												}
+												else
+												{
+													BubbleSphere.AccumulatedDecouple +=
+														FVector::RightVector * DistanceDelta *
+														Strength;
+												}
+											}
+											else
+											{
+												BubbleSphere.AccumulatedDecouple +=
+													(Delta / Distance) * DistanceDelta *
+													Strength;
+											}
+											if (BubbleSphere.AccumulatedDecoupleCount++ == 1)
+											{
+												if (bUseTrait) // Compile-time branch
+												{
+													Bubble.SetTraitDeferred(FCoupling{});
+												}
+												else
+												{
+													CoupledSubjects.Enqueue(FCouplingEntry((FSubjectHandle)Bubble, &Located, &BubbleSphere));
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}, ThreadsCount);
+		}
+
+		// Decouple...
+		{
+			QUICK_SCOPE_CYCLE_COUNTER(STAT_BubbleCage_DecoupleThroughLocations);
+			if (bUseTrait) // Compile-time branch.
+			{
+				Mechanism->OperateConcurrently(
+				[=](FSolidSubjectHandle Subject, FLocated& Located, FBubbleSphere& BubbleSphere, const FCoupling&)
+				{
+					Located.Location += BubbleSphere.AccumulatedDecouple /
+										BubbleSphere.AccumulatedDecoupleCount;
+					BubbleSphere.AccumulatedDecouple = FVector::ZeroVector;
+					BubbleSphere.AccumulatedDecoupleCount = 0;
+					Subject.RemoveTraitDeferred<FCoupling>();
+
+					const auto Location = Located.Location;
+					const auto FormerCellIndex = GetIndexAt(Location);
+					if (UNLIKELY(!IsInside(Location)))
+					{
+						Subject.DespawnDeferred();
+						return;
+					}
+
+					const auto CellIndex = GetIndexAt(Location);
+					if (FormerCellIndex != CellIndex)
+					{
+						auto& FormerCell = Cells[CellIndex];
+						FormerCell.Lock();
+						FormerCell.Subjects.Remove((FSubjectHandle)Subject);
+						FormerCell.Unlock();
+						auto& Cell = Cells[CellIndex];
+						Cell.Lock();
+						Cell.Subjects.Add((FSubjectHandle)Subject);
+						Cell.Fingerprint.Add(Subject.GetFingerprint());
+						Cell.Unlock();
+					}
+
+					OccupiedCells.Enqueue(CellIndex);
+				}, ThreadsCount);
+			}
+			else
+			{
+				FCouplingEntry Coupling;
+				while (CoupledSubjects.Dequeue(Coupling))
+				{
+					if (Coupling.Subject && (Coupling.BubbleSphere->AccumulatedDecoupleCount > 0)) // Can already be handled and even despawned.
+					{
+						auto& Located      = *Coupling.Located;
+						auto& BubbleSphere = *Coupling.BubbleSphere;
+						check(BubbleSphere.AccumulatedDecoupleCount > 0);
+						Located.Location += BubbleSphere.AccumulatedDecouple /
+											BubbleSphere.AccumulatedDecoupleCount;
+						BubbleSphere.AccumulatedDecouple = FVector::ZeroVector;
+						BubbleSphere.AccumulatedDecoupleCount = 0;
+
+						const auto Location = Located.Location;
+						if (UNLIKELY(!IsInside(Location)))
+						{
+							Coupling.Subject.Despawn();
+							continue;
+						}
+
+						const auto CellIndex = GetIndexAt(Location);
+						auto& Cell = Cells[CellIndex];
+						Cell.Subjects.Add(Coupling.Subject);
+						Cell.Fingerprint.Add(Coupling.Subject.GetFingerprint());
+
+						// Occupied list can have duplicates, cause
+						// it's used for resetting only:
+						OccupiedCells.Enqueue(CellIndex);
+					}
+				}
+			}
+		}
 	}
 
 	/**
@@ -621,95 +836,14 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	void
 	Decouple()
 	{
-		QUICK_SCOPE_CYCLE_COUNTER(STAT_BubbleCage_Decouple);
-
-		const auto Mechanism = GetMechanism();
-
-		static const auto Filter = FFilter::Make<FLocated, FBubbleSphere>();
-		// Detect collisions...
-		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=]
-		(FSolidSubjectHandle Bubble,
-		 FLocated&           Located,
-		 FBubbleSphere&      BubbleSphere)
+		if (bDecoupleViaTrait)
 		{
-			if (UNLIKELY(BubbleSphere.DecoupleProportion <= 0.0f)) return;
-			const auto Location = Located.Location;
-			const auto Range = FVector(BubbleSphere.Radius + LargestRadius);
-			const auto CagePosMin = WorldToCage(Location - Range);
-			const auto CagePosMax = WorldToCage(Location + Range);
-			for (auto i = CagePosMin.X; i <= CagePosMax.X; ++i)
-			{
-				for (auto j = CagePosMin.Y; j <= CagePosMax.Y; ++j)
-				{
-					for (auto k = CagePosMin.Z; k <= CagePosMax.Z; ++k)
-					{
-						const auto NeighbourCellPos = FIntVector(i, j, k);
-						if (LIKELY(IsInside(NeighbourCellPos)))
-						{
-							const auto& NeighbourCell = At(NeighbourCellPos);
-							for (int32 t = 0; t < NeighbourCell.Subjects.Num(); ++t)
-							{
-								const auto OtherBubble = NeighbourCell.Subjects[t];
-								if (LIKELY(OtherBubble && (OtherBubble != Bubble)))
-								{
-									const auto OtherBubbleSphere =
-										OtherBubble.GetTrait<FBubbleSphere>();
-									const auto OtherLocation =
-										OtherBubble.GetTrait<FLocated>().GetLocation();
-									const auto Delta = Location - OtherLocation;
-									const float Distance = Delta.Size();
-									const float DistanceDelta =
-										(BubbleSphere.Radius + OtherBubbleSphere.Radius) - Distance;
-									const float Strength = BubbleSphere.DecoupleProportion /
-														  (BubbleSphere.DecoupleProportion + OtherBubbleSphere.DecoupleProportion);
-									if (DistanceDelta > 0)
-									{
-										// We're hitting a neighbor.
-										if (UNLIKELY(Distance <= 0.01f))
-										{
-											// The distance is too small to get the direction.
-											// Use the ids to get the direction.
-											if (Bubble.GetId() > OtherBubble.GetId())
-											{
-												BubbleSphere.AccumulatedDecouple +=
-													FVector::LeftVector * DistanceDelta *
-													Strength;
-											}
-											else
-											{
-												BubbleSphere.AccumulatedDecouple +=
-													FVector::RightVector * DistanceDelta *
-													Strength;
-											}
-										}
-										else
-										{
-											BubbleSphere.AccumulatedDecouple +=
-												(Delta / Distance) * DistanceDelta *
-												Strength;
-										}
-										BubbleSphere.AccumulatedDecoupleCount += 1;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}, ThreadsCount);
-
-		// Decouple...
-		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=]
-		(FLocated& Located, FBubbleSphere& BubbleSphere)
+			DoDecouple<true>();
+		}
+		else
 		{
-			if (BubbleSphere.AccumulatedDecoupleCount > 0)
-			{
-				Located.Location += BubbleSphere.AccumulatedDecouple /
-									BubbleSphere.AccumulatedDecoupleCount;
-				BubbleSphere.AccumulatedDecouple = FVector::ZeroVector;
-				BubbleSphere.AccumulatedDecoupleCount = 0;
-			}
-		}, ThreadsCount);
+			DoDecouple<false>();
+		}
 	}
 
 	/**
@@ -724,6 +858,5 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	{
 		Update();
 		Decouple();
-		Update();
 	}
 };

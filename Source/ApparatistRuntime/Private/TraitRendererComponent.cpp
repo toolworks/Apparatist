@@ -3,11 +3,13 @@
 #include "TraitRendererComponent.h"
 
 #include "Located.h"
-#include "Oriented.h"
+#include "Directed.h"
 #include "Rotated.h"
 #include "Rendering.h"
 #include "Scaled.h"
 
+
+TMap<UScriptStruct*, UTraitRendererComponent*> UTraitRendererComponent::InstancesByTraitTypes;
 
 UTraitRendererComponent::UTraitRendererComponent()
 {
@@ -15,7 +17,19 @@ UTraitRendererComponent::UTraitRendererComponent()
 	PrimaryComponentTick.bStartWithTickEnabled = true;
 }
 
-void UTraitRendererComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+void
+UTraitRendererComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (TraitType != nullptr)
+	{
+		InstancesByTraitTypes.Add(TraitType, this);
+	}
+}
+
+void
+UTraitRendererComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	FFilter Filter = FFilter::Make<FLocated, FRendering>();
 	Filter += TraitType;
@@ -30,6 +44,20 @@ void UTraitRendererComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 			Subject.RemoveTrait<FRendering>();
 		});
 	}
+
+	if (TraitType != nullptr)
+	{
+		InstancesByTraitTypes.Remove(TraitType);
+	}
+
+	if (AsyncRenderStateUpdateTask != nullptr)
+	{
+		AsyncRenderStateUpdateTask->EnsureCompletion();
+		delete AsyncRenderStateUpdateTask;
+		AsyncRenderStateUpdateTask = nullptr;
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void UTraitRendererComponent::TickComponent(
@@ -38,14 +66,22 @@ void UTraitRendererComponent::TickComponent(
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (bFirstTick)
+	if (!bManualUpdate)
+	{
+		Update();
+	}
+}
+
+void UTraitRendererComponent::Update()
+{
+	if (bFirstUpdate)
 	{
 		// Make sure there are no instances yet in the renderer...
 		while (GetInstanceCount())
 		{
 			RemoveInstance(0);
 		}
-		bFirstTick = false;
+		bFirstUpdate = false;
 	}
 
 	const auto Mechanism = UMachine::ObtainMechanism(GetWorld());
@@ -55,12 +91,12 @@ void UTraitRendererComponent::TickComponent(
 	Filter += TraitType;
 	Filter.Exclude<FRendering>();
 	Mechanism->Enchain<FUnsafeChain>(Filter)->Operate(
-	[=](FUnsafeSubjectHandle Subject, const FLocated& Located, const FOriented* Oriented, const FRotated* Rotated, const FScaled* Scaled)
+	[=](FUnsafeSubjectHandle Subject, const FLocated& Located, const FDirected* Directed, const FRotated* Rotated, const FScaled* Scaled)
 	{
 		FQuat Rotation{FQuat::Identity};
-		if (Oriented)
+		if (Directed)
 		{
-			Rotation = Oriented->Orientation.Rotation().Quaternion();
+			Rotation = Directed->Direction.Rotation().Quaternion();
 		}
 		if (Rotated)
 		{
@@ -96,12 +132,12 @@ void UTraitRendererComponent::TickComponent(
 	Filter = FFilter::Make<FLocated, FRendering>();
 	Filter += TraitType;
 	Mechanism->EnchainSolid(Filter)->Operate(
-	[=](FSolidSubjectHandle Subject, FLocated Located, FRendering Rendering, FOriented* Oriented, FRotated* Rotated, FScaled* Scaled)
+	[=](FSolidSubjectHandle Subject, FLocated Located, FRendering Rendering, FDirected* Directed, FRotated* Rotated, FScaled* Scaled)
 	{
 		FQuat Rotation{ FQuat::Identity };
-		if (Oriented)
+		if (Directed)
 		{
-			Rotation = Oriented->Orientation.Rotation().Quaternion();
+			Rotation = Directed->Direction.Rotation().Quaternion();
 		}
 		if (Rotated)
 		{
@@ -130,8 +166,16 @@ void UTraitRendererComponent::TickComponent(
 		Transforms[i].SetScale3D(FVector::ZeroVector);
 	}
 
+	if (!bManualRenderStateUpdate)
+	{
+		UpdateRenderState();
+	}
+}
+
+void UTraitRendererComponent::UpdateRenderState()
+{
 	if (Transforms.Num() > 0)
 	{
-		BatchUpdateInstancesTransforms(0, Transforms, true, true, /*bTeleport=*/false);
+		BatchUpdateInstancesTransforms(0, Transforms, true, /*bMarkRenderStateDirty=*/true, /*bTeleport=*/bUpdateViaTeleport);
 	}
 }

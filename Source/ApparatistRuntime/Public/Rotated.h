@@ -1,4 +1,16 @@
-// 2021 Vladislav Dmitrievich Turbanov
+/*
+ * ░▒▓ APPARATIST ▓▒░
+ * 
+ * File: BubbleCageCell.h
+ * Created: 2022-05-11
+ * Author: Vladislav Dmitrievich Turbanov (vladislav@turbanov.ru)
+ * ───────────────────────────────────────────────────────────────────
+ * 
+ * Community forums: https://talk.turbanov.ru
+ * 
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
+ * Made in Russia, Moscow City, Chekhov City ♡
+ */
 
 #pragma once
 
@@ -23,15 +35,12 @@ struct APPARATISTRUNTIME_API FRotated
 	FQuat Rotation = FQuat{FQuat::Identity};
 
 	/* Default constructor. */
-	FRotated() {}
-
-	///* Constructor with all arguments. */
-	//FORCEINLINE FRotated(const FTransform& InTransform)
-	//  : FRotated(InTransform.GetLocation())
-	//{}
+	FRotated()
+	{}
 
 	/* Construct the trait by 2D-location. */
-	FORCEINLINE FRotated(const FQuat& InRotation)
+	FORCEINLINE
+	FRotated(const FQuat& InRotation)
 	  : Rotation(InRotation)
 	{}
 

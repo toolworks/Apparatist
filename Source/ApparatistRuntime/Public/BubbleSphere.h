@@ -1,4 +1,16 @@
-// 2022 Vladislav Dmitrievich Turbanov
+/*
+ * ░▒▓ APPARATIST ▓▒░
+ * 
+ * File: BubbleCageCell.h
+ * Created: 2022-21-01
+ * Author: Vladislav Dmitrievich Turbanov (vladislav@turbanov.ru)
+ * ───────────────────────────────────────────────────────────────────
+ * 
+ * Community forums: https://talk.turbanov.ru
+ * 
+ * Copyright 2019 - 2023, SP Vladislav Dmitrievich Turbanov
+ * Made in Russia, Moscow City, Chekhov City ♡
+ */
 
 #pragma once
 

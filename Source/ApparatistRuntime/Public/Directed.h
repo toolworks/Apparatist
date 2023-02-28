@@ -2,7 +2,7 @@
  * ░▒▓ APPARATIST ▓▒░
  * 
  * File: BubbleCageCell.h
- * Created: 2022-05-11
+ * Created: 2022-03-27
  * Author: Vladislav Dmitrievich Turbanov (vladislav@turbanov.ru)
  * ───────────────────────────────────────────────────────────────────
  * 
@@ -16,41 +16,36 @@
 
 #include "CoreMinimal.h"
 
-#include "Scaled.generated.h"
+#include "Directed.generated.h"
 
 
 /**
- * A general scaling provider.
+ * Struct representing actor/projectile that have an orientation in the world.
  */
 USTRUCT(BlueprintType, Category = "Basic")
-struct APPARATISTRUNTIME_API FScaled
+struct APPARATISTRUNTIME_API FDirected
 {
 	GENERATED_BODY()
 
   public:
 
-	/// The scaling factors to apply.
+	/**
+	 * The forward looking vector.
+	 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Data")
-	FVector Factors = FVector::OneVector;
+	FVector Direction = FVector::ForwardVector;
 
-	/// Default constructor.
-	FScaled() {}
-
-	/// Construct with a factor.
-	FORCEINLINE
-	FScaled(const float InFactor)
-	  : Factors(InFactor)
+	/**
+	 * Default-initialize the direction.
+	 */
+	FDirected()
 	{}
 
-	/// Construct with factors vector.
+	/**
+	 * Initialize with a vector direction.
+	 */
 	FORCEINLINE
-	FScaled(const FVector InFactors)
-	  : Factors(InFactors)
-	{}
-
-	/// Construct copying from a transform.
-	FORCEINLINE
-	FScaled(const FTransform& InTransform)
-	  : Factors(InTransform.GetScale3D())
+	FDirected(const FVector& InDirection)
+	  : Direction(InDirection)
 	{}
 };
