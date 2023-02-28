@@ -699,11 +699,12 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 										const auto OtherLocation =
 											OtherBubble.GetTraitRef<FLocated>().GetLocation();
 										const auto Delta = Location - OtherLocation;
-										const auto Distance = Delta.Size();
-										const float DistanceDelta =
-											(BubbleSphere.Radius + OtherBubbleSphere.Radius) - Distance;
-										if (DistanceDelta > 0)
+										auto Distance = Delta.SizeSquared();
+										const auto NeededDistance = BubbleSphere.Radius + OtherBubbleSphere.Radius;
+										if (Distance < NeededDistance * NeededDistance)
 										{
+											Distance = FMath::Sqrt(Distance);
+											const float DistanceDelta = NeededDistance - Distance;
 											const float Strength = BubbleSphere.DecoupleProportion /
 															(BubbleSphere.DecoupleProportion + OtherBubbleSphere.DecoupleProportion);
 											// We're hitting a neighbor.
