@@ -50,6 +50,11 @@ struct APPARATISTRUNTIME_API FBubbleSphere
 			  Meta = (ClampMin="0"))
 	float DecoupleProportion = 1.0f;
 
+	/**
+	 * The index of the current cell.
+	 */
+	int32 CellIndex = -1;
+
 	/// The accumulated decoupling force.
 	FVector AccumulatedDecouple = FVector::ZeroVector;
 

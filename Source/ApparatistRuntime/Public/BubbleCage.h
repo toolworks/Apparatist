@@ -67,6 +67,8 @@ class APPARATISTRUNTIME_API ABubbleCage
 	void
 	BeginPlay() override
 	{
+		Super::BeginPlay();
+
 		Instance = this;
 	}
 

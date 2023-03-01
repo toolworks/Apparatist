@@ -25,5 +25,6 @@ UBubbleCageComponent::InitializeComponent()
 {
 	DoInitializeCells();
 	GetBounds();
+	InvCellSizeCache = 1 / CellSize;
 	bInitialized = true;
 }

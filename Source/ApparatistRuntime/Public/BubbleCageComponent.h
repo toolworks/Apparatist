@@ -57,11 +57,11 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
   private:
 
 	/**
-	 * The largest radius among the bubbles.
+	 * The largest radius among all the bubbles.
 	 * 
-	 * Used for neighbour detection.
+	 * Used for the coupling candidates detection.
 	 */
-	std::atomic<float> LargestRadius{0};
+	float LargestRadius = 0.0f;
 
   public:
 
@@ -87,6 +87,11 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	 */
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Volume", Meta = (AllowPrivateAccess))
 	float CellSize = 1;
+
+	/**
+	 * Inverse (1/x) cell size cached for performance.
+	 */
+	float InvCellSizeCache = 1;
 
 	/**
 	 * The total size of the cage in number of cells.
@@ -226,18 +231,41 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 		return Bounds;
 	}
 
-	void
-	BeginPlay() override
-	{
-		DoInitializeCells();
-	}
-
-	/* Convert world 3d-location to position in the cage. No checks. */
+	/**
+	 * Convert a global 3D location to a position within the cage.
+	 * 
+	 * No bounding checks are performed.
+	 */
 	FORCEINLINE FIntVector
 	WorldToCage(FVector Point) const
 	{
 		Point -= Bounds.Min;
-		Point /= CellSize;
+		Point *= InvCellSizeCache;
+		return FIntVector(FMath::FloorToInt(Point.X),
+						  FMath::FloorToInt(Point.Y),
+						  FMath::FloorToInt(Point.Z));
+	}
+
+	/**
+	 * Convert a global 3D location to a position within the bounds.
+	 * 
+	 * No bounding checks are performed.
+	 */
+	FORCEINLINE FVector
+	WorldToBounded(const FVector& Point) const
+	{
+		return Point - Bounds.Min;
+	}
+
+	/**
+	 * Convert a cage-local 3D location to a position within the cage.
+	 * 
+	 * No bounding checks are performed.
+	 */
+	FORCEINLINE FIntVector
+	BoundedToCage(FVector Point) const
+	{
+		Point *= InvCellSizeCache;
 		return FIntVector(FMath::FloorToInt(Point.X),
 						  FMath::FloorToInt(Point.Y),
 						  FMath::FloorToInt(Point.Z));
@@ -284,8 +312,8 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 								const auto OtherLocation =
 									OtherBubble.GetTrait<FLocated>().GetLocation();
 								const auto Delta = Location - OtherLocation;
-								const float Distance = Delta.Size();
-								if (OtherBubbleSphere.Radius > Distance)
+								const float DistanceSqr = Delta.SizeSquared();
+								if (FMath::Square(OtherBubbleSphere.Radius) > DistanceSqr)
 								{
 									OutOverlappers.Add(OtherBubble);
 								}
@@ -334,8 +362,8 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 									const auto OtherLocation =
 										OtherBubble.GetTrait<FLocated>().GetLocation();
 									const auto Delta = Location - OtherLocation;
-									const float Distance = Delta.Size();
-									if (OtherBubbleSphere.Radius > Distance)
+									const float DistanceSqr = Delta.SizeSquared();
+									if (FMath::Square(OtherBubbleSphere.Radius) > DistanceSqr)
 									{
 										OutOverlappers.Add(OtherBubble);
 									}
@@ -386,9 +414,8 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 								const auto OtherLocation =
 									OtherBubble.GetTrait<FLocated>().GetLocation();
 								const auto Delta = Location - OtherLocation;
-								const float Distance = Delta.Size();
-								const float DistanceDelta = (Radius + OtherBubbleSphere.Radius) - Distance;
-								if (DistanceDelta > 0)
+								const auto DistanceSqr = Delta.SizeSquared();
+								if (FMath::Square(Radius + OtherBubbleSphere.Radius) > DistanceSqr)
 								{
 									OutOverlappers.Add(OtherBubble);
 								}
@@ -444,9 +471,8 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 									const auto OtherLocation =
 										OtherBubble.GetTrait<FLocated>().GetLocation();
 									const auto Delta = Location - OtherLocation;
-									const float Distance = Delta.Size();
-									const float DistanceDelta = (Radius + OtherBubbleSphere.Radius) - Distance;
-									if (DistanceDelta > 0)
+									const auto DistanceSqr = Delta.SizeSquared();
+									if (FMath::Square(Radius + OtherBubbleSphere.Radius) > DistanceSqr)
 									{
 										OutOverlappers.Add(OtherBubble);
 									}
@@ -494,24 +520,28 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 		return MoveTemp(Overlappers);
 	}
 
-	/* Get position in the cage by index of the cell*/
+	/**
+	 * Get a position within the cage by an index of the cell.
+	 */
 	FORCEINLINE FIntVector
 	GetCellPointByIndex(int32 Index) const
 	{
 		int32 z = Index / (Size.X * Size.Y);
-		int32 layerPadding = Index - (z * Size.X * Size.Y);
+		int32 LayerPadding = Index - (z * Size.X * Size.Y);
 
-		return FIntVector(layerPadding / Size.X, layerPadding % Size.X , z);
+		return FIntVector(LayerPadding / Size.X, LayerPadding % Size.X , z);
 	}
 
 	/* Get the index of the cage cell. */
-	int32 GetIndexAt(const FIntVector& CellPoint) const
+	FORCEINLINE int32
+	GetIndexAt(const FIntVector& CellPoint) const
 	{
 		return GetIndexAt(CellPoint.X, CellPoint.Y, CellPoint.Z);
 	}
 
 	/* Get the index of the cell by the world position. */
-	int32 GetIndexAt(FVector Point) const
+	FORCEINLINE int32
+	GetIndexAt(const FVector& Point) const
 	{
 		return GetIndexAt(WorldToCage(Point));
 	}
@@ -609,18 +639,16 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 			Cell.Subjects.Empty();
 			Cell.Fingerprint.Reset();
 		}
-
-		LargestRadius.store(0, std::memory_order_relaxed);
+		
+		// Use atomic for a thread safety:
+		std::atomic<float> AtomicLargestRadius{0};
 
 		// Occupy the cage cells...
 		static const auto Filter = FFilter::Make<FLocated, FBubbleSphere>();
-		// An atomic flag used for syncing the access to the
-		// subjects collection:
-		FCriticalSection CollectingLock;
-		Mechanism->EnchainSolid(Filter)->OperateConcurrently([=, &CollectingLock]
-		(FSolidSubjectHandle  Subject,
-		 const FLocated&      Located,
-		 const FBubbleSphere& BubbleSphere)
+		Mechanism->EnchainSolid(Filter)->OperateConcurrently(
+		[&](FSolidSubjectHandle  Subject,
+			const FLocated&      Located,
+			FBubbleSphere&       BubbleSphere)
 		{
 			const auto Location = Located.Location;
 			if (UNLIKELY(!IsInside(Location)))
@@ -630,10 +658,10 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 			}
 			{
 				// Solve the largest radius...
-				auto Largest = LargestRadius.load(std::memory_order_relaxed);
+				auto Largest = AtomicLargestRadius.load(std::memory_order_relaxed);
 				if (Largest < BubbleSphere.Radius)
 				{
-					while (!LargestRadius.compare_exchange_weak(Largest, BubbleSphere.Radius, std::memory_order_relaxed))
+					while (!AtomicLargestRadius.compare_exchange_weak(Largest, BubbleSphere.Radius, std::memory_order_relaxed))
 					{
 						if (Largest >= BubbleSphere.Radius)
 						{
@@ -643,17 +671,21 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 				}
 			}
 
-			const auto CellIndex = GetIndexAt(Location);
+			BubbleSphere.CellIndex = GetIndexAt(Location);
 			{
-				auto& Cell = Cells[CellIndex];
+				auto& Cell = Cells[BubbleSphere.CellIndex];
 				Cell.Lock();
-				Cell.Subjects.Add((FSubjectHandle)Subject);
+				const auto Index = Cell.Subjects.Add((FSubjectHandle)Subject);
 				Cell.Fingerprint.Add(Subject.GetFingerprint());
 				Cell.Unlock();
-			}
-
-			OccupiedCells.Enqueue(CellIndex);
+				if (Index == 0)
+				{
+					OccupiedCells.Enqueue(BubbleSphere.CellIndex);
+				}
+			}			
 		}, ThreadsCount);
+
+		LargestRadius = AtomicLargestRadius.load(std::memory_order_relaxed);
 	}
 
 	template < bool bUseTrait >
@@ -676,7 +708,7 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 			{
 				if (UNLIKELY(BubbleSphere.DecoupleProportion <= 0.0f)) return;
 				const auto Location = Located.Location;
-				const auto Range = FVector(BubbleSphere.Radius + LargestRadius.load(std::memory_order_relaxed));
+				const auto Range = FVector(BubbleSphere.Radius + LargestRadius);
 				const auto CagePosMin = WorldToCage(Location - Range);
 				const auto CagePosMax = WorldToCage(Location + Range);
 				for (auto i = CagePosMin.X; i <= CagePosMax.X; ++i)
@@ -701,7 +733,7 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 										const auto Delta = Location - OtherLocation;
 										auto Distance = Delta.SizeSquared();
 										const auto NeededDistance = BubbleSphere.Radius + OtherBubbleSphere.Radius;
-										if (Distance < NeededDistance * NeededDistance)
+										if (Distance < FMath::Square(NeededDistance))
 										{
 											Distance = FMath::Sqrt(Distance);
 											const float DistanceDelta = NeededDistance - Distance;
@@ -758,7 +790,10 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 			if (bUseTrait) // Compile-time branch.
 			{
 				Mechanism->OperateConcurrently(
-				[=](FSolidSubjectHandle Subject, FLocated& Located, FBubbleSphere& BubbleSphere, const FCoupling&)
+				[&](FSolidSubjectHandle Subject,
+					FLocated&           Located,
+					FBubbleSphere&      BubbleSphere,
+					const FCoupling&)
 				{
 					Located.Location += BubbleSphere.AccumulatedDecouple /
 										BubbleSphere.AccumulatedDecoupleCount;
@@ -766,29 +801,30 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 					BubbleSphere.AccumulatedDecoupleCount = 0;
 					Subject.RemoveTraitDeferred<FCoupling>();
 
-					const auto Location = Located.Location;
-					const auto FormerCellIndex = GetIndexAt(Location);
-					if (UNLIKELY(!IsInside(Location)))
+					if (UNLIKELY(!IsInside(Located.Location)))
 					{
 						Subject.DespawnDeferred();
 						return;
 					}
 
-					const auto CellIndex = GetIndexAt(Location);
-					if (FormerCellIndex != CellIndex)
+					const auto NewCellIndex = GetIndexAt(Located.Location);
+					if (BubbleSphere.CellIndex != NewCellIndex)
 					{
-						auto& FormerCell = Cells[CellIndex];
+						auto& FormerCell = Cells[BubbleSphere.CellIndex];
 						FormerCell.Lock();
 						FormerCell.Subjects.Remove((FSubjectHandle)Subject);
 						FormerCell.Unlock();
-						auto& Cell = Cells[CellIndex];
-						Cell.Lock();
-						Cell.Subjects.Add((FSubjectHandle)Subject);
-						Cell.Fingerprint.Add(Subject.GetFingerprint());
-						Cell.Unlock();
+						auto& NewCell = Cells[NewCellIndex];
+						NewCell.Lock();
+						const auto Index = NewCell.Subjects.Add((FSubjectHandle)Subject);
+						NewCell.Fingerprint.Add(Subject.GetFingerprint());
+						NewCell.Unlock();
+						BubbleSphere.CellIndex = NewCellIndex;
+						if (Index == 0)
+						{
+							OccupiedCells.Enqueue(NewCellIndex);
+						}
 					}
-
-					OccupiedCells.Enqueue(CellIndex);
 				}, ThreadsCount);
 			}
 			else
@@ -806,21 +842,27 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 						BubbleSphere.AccumulatedDecouple = FVector::ZeroVector;
 						BubbleSphere.AccumulatedDecoupleCount = 0;
 
-						const auto Location = Located.Location;
-						if (UNLIKELY(!IsInside(Location)))
+						if (UNLIKELY(!IsInside(Located.Location)))
 						{
 							Coupling.Subject.Despawn();
 							continue;
 						}
 
-						const auto CellIndex = GetIndexAt(Location);
-						auto& Cell = Cells[CellIndex];
-						Cell.Subjects.Add(Coupling.Subject);
-						Cell.Fingerprint.Add(Coupling.Subject.GetFingerprint());
-
-						// Occupied list can have duplicates, cause
-						// it's used for resetting only:
-						OccupiedCells.Enqueue(CellIndex);
+						const auto NewCellIndex = GetIndexAt(Located.Location);
+						if (BubbleSphere.CellIndex != NewCellIndex)
+						{
+							// Not using locks here, cause we're in a single-threaded mode...
+							auto& FormerCell = Cells[BubbleSphere.CellIndex];
+							FormerCell.Subjects.Remove(Coupling.Subject);
+							auto& NewCell = Cells[NewCellIndex];
+							const auto Index = NewCell.Subjects.Add(Coupling.Subject);
+							NewCell.Fingerprint.Add(Coupling.Subject.GetFingerprint());
+							BubbleSphere.CellIndex = NewCellIndex;
+							if (Index == 0)
+							{
+								OccupiedCells.Enqueue(NewCellIndex);
+							}
+						}
 					}
 				}
 			}
