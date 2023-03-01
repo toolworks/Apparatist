@@ -65,6 +65,6 @@ GetSingletonTrait(AMechanism* const Mechanism)
 		return FSubjectHandle::Invalid;
 	}
 
-	auto Trait = Cursor.GetTrait<T>();
+	auto Trait = Cursor.template GetTrait<T>();
 	return MoveTempIfPossible(Trait);
 }
