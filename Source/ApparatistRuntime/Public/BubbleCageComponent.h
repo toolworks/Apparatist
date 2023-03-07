@@ -763,7 +763,7 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 													(Delta / Distance) * DistanceDelta *
 													Strength;
 											}
-											if (BubbleSphere.AccumulatedDecoupleCount++ == 1)
+											if (BubbleSphere.AccumulatedDecoupleCount++ == 0)
 											{
 												if (bUseTrait) // Compile-time branch
 												{
@@ -844,7 +844,9 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 
 						if (UNLIKELY(!IsInside(Located.Location)))
 						{
-							Coupling.Subject.Despawn();
+							// We can't despawn normally here, since it will
+							// screw up the direct trait references in the queue.
+							Coupling.Subject.DespawnDeferred();
 							continue;
 						}
 
@@ -865,6 +867,7 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 						}
 					}
 				}
+				Mechanism->ApplyDeferreds();
 			}
 		}
 	}
