@@ -21,7 +21,9 @@ public class ApparatistRuntime : ModuleRules
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
         PublicDependencyModuleNames.AddRange(new string[] {
-            "Core", "CoreUObject", "Engine",
+            "Core",
+            "CoreUObject",
+            "Engine",
             "ApparatusRuntime" });
     }
 }

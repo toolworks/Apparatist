@@ -192,7 +192,9 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	/// @}
 #pragma endregion Debugging
 
-	/* Sets default values for the actor's properties. */
+	/**
+	 * Initialize the defaults for the bubble cage component.
+	 */
 	UBubbleCageComponent();
 
 	/**

@@ -1,7 +1,7 @@
 /*
  * ░▒▓ APPARATIST ▓▒░
  * 
- * File: BubbleCageCell.h
+ * File: Located.h
  * Created: 2022-21-01
  * Author: Vladislav Dmitrievich Turbanov (vladislav@turbanov.ru)
  * ───────────────────────────────────────────────────────────────────
