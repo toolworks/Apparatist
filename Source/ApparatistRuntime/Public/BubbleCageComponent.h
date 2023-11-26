@@ -159,7 +159,8 @@ class APPARATISTRUNTIME_API UBubbleCageComponent
 	{
 		Cells.Reset(); // Make sure there are no cells.
 		if (ensureAlwaysMsgf((int64)Size.X * (int64)Size.Y * (int64)Size.Z < (int64)TNumericLimits<int32>::Max(),
-							 TEXT("The '%s' bubble cage has too many cells in it. Please, decrease its corresponding size in cells.")))
+							 TEXT("The '%s' bubble cage has too many cells in it. Please, decrease its corresponding size in cells."),
+							 *GetName()))
 		{
 			Cells.AddDefaulted(Size.X * Size.Y * Size.Z);
 		}
