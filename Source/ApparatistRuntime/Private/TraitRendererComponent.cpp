@@ -91,7 +91,7 @@ void UTraitRendererComponent::Update()
 	Filter += TraitType;
 	Filter.Exclude<FRendering>();
 	Mechanism->Enchain<FUnsafeChain>(Filter)->Operate(
-	[=](FUnsafeSubjectHandle Subject, const FLocated& Located, const FDirected* Directed, const FRotated* Rotated, const FScaled* Scaled)
+	[=, this](FUnsafeSubjectHandle Subject, const FLocated& Located, const FDirected* Directed, const FRotated* Rotated, const FScaled* Scaled)
 	{
 		FQuat Rotation{FQuat::Identity};
 		if (Directed)
@@ -102,7 +102,7 @@ void UTraitRendererComponent::Update()
 		{
 			Rotation *= Rotated->Rotation;
 		}
-		FVector FinalScale(Scale);
+		FVector FinalScale(this->Scale);
 		if (Scaled)
 		{
 			FinalScale *= Scaled->Factors;
@@ -132,7 +132,7 @@ void UTraitRendererComponent::Update()
 	Filter = FFilter::Make<FLocated, FRendering>();
 	Filter += TraitType;
 	Mechanism->EnchainSolid(Filter)->Operate(
-	[=](FSolidSubjectHandle Subject, FLocated Located, FRendering Rendering, FDirected* Directed, FRotated* Rotated, FScaled* Scaled)
+	[=, this](FSolidSubjectHandle Subject, FLocated Located, FRendering Rendering, FDirected* Directed, FRotated* Rotated, FScaled* Scaled)
 	{
 		FQuat Rotation{ FQuat::Identity };
 		if (Directed)
@@ -143,7 +143,7 @@ void UTraitRendererComponent::Update()
 		{
 			Rotation *= Rotated->Rotation;
 		}
-		FVector FinalScale(Scale);
+		FVector FinalScale(this->Scale);
 		if (Scaled)
 		{
 			FinalScale *= Scaled->Factors;
